@@ -93,9 +93,13 @@ cd Serial-Studio
 ```
 
 ### 编译应用程序
+#### 环境配置
+##### vulkan SDK
+[下载地址](https://vulkan.lunarg.com/sdk/home#windows)
+
+
 
 安装 Qt 后，你可以通过在你喜欢的 IDE 中打开 **CMakeLists.txt** 文件或使用命令行编译项目：
-
 ```bash
 mkdir build
 cd build 
