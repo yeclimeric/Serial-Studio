@@ -25,6 +25,7 @@
 #include <QSimpleUpdater.h>
 
 #include "AppInfo.h"
+#include "WidgetsCommon.h"
 
 #include "CSV/Export.h"
 #include "CSV/Player.h"
@@ -53,7 +54,19 @@
 
 #include "UI/Dashboard.h"
 #include "UI/DashboardWidget.h"
+
+#include "UI/Widgets/Bar.h"
+#include "UI/Widgets/GPS.h"
+#include "UI/Widgets/Plot.h"
+#include "UI/Widgets/Gauge.h"
+#include "UI/Widgets/Compass.h"
+#include "UI/Widgets/FFTPlot.h"
+#include "UI/Widgets/DataGrid.h"
+#include "UI/Widgets/LEDPanel.h"
 #include "UI/Widgets/Terminal.h"
+#include "UI/Widgets/Gyroscope.h"
+#include "UI/Widgets/MultiPlot.h"
+#include "UI/Widgets/Accelerometer.h"
 
 /**
  * @brief Custom message handler for Qt debug, warning, critical, and fatal
@@ -193,10 +206,29 @@ void Misc::ModuleManager::configureUpdater()
  */
 void Misc::ModuleManager::registerQmlTypes()
 {
-  qmlRegisterType<Widgets::Terminal>("SerialStudio", 1, 0, "Terminal");
+  // Register custom QML widgets & widget models
+  qmlRegisterType<Widgets::Bar>("SerialStudio", 1, 0, "BarModel");
+  qmlRegisterType<Widgets::GPS>("SerialStudio", 1, 0, "GPSModel");
+  qmlRegisterType<Widgets::Plot>("SerialStudio", 1, 0, "PlotModel");
+  qmlRegisterType<Widgets::Gauge>("SerialStudio", 1, 0, "GaugeModel");
+  qmlRegisterType<Widgets::Compass>("SerialStudio", 1, 0, "CompassModel");
+  qmlRegisterType<Widgets::FFTPlot>("SerialStudio", 1, 0, "FFTPlotModel");
+  qmlRegisterType<Widgets::DataGrid>("SerialStudio", 1, 0, "DataGridModel");
+  qmlRegisterType<Widgets::LEDPanel>("SerialStudio", 1, 0, "LEDPanelModel");
+  qmlRegisterType<Widgets::Terminal>("SerialStudio", 1, 0, "TerminalWidget");
+  qmlRegisterType<Widgets::MultiPlot>("SerialStudio", 1, 0, "MultiPlotModel");
+  qmlRegisterType<Widgets::Gyroscope>("SerialStudio", 1, 0, "GyroscopeModel");
+  qmlRegisterType<Widgets::Accelerometer>("SerialStudio", 1, 0,
+                                          "AccelerometerModel");
+
+  // Register JSON custom items
+  qmlRegisterType<JSON::FrameParser>("SerialStudio", 1, 0, "FrameParser");
   qmlRegisterType<JSON::ProjectModel>("SerialStudio", 1, 0, "ProjectModel");
   qmlRegisterType<JSON::FrameBuilder>("SerialStudio", 1, 0, "JsonGenerator");
-  qmlRegisterType<JSON::FrameParser>("SerialStudio", 1, 0, "FrameParser");
+
+  // Register generic dashboard widget
+  qmlRegisterType<WC>("SerialStudio", 1, 0, "WC");
+  qmlRegisterType<UI::Dashboard>("SerialStudio", 1, 0, "Dashboard");
   qmlRegisterType<UI::DashboardWidget>("SerialStudio", 1, 0, "DashboardWidget");
 }
 
@@ -235,6 +267,10 @@ void Misc::ModuleManager::initializeQmlInterface()
   connect(miscTranslator, &Misc::Translator::languageChanged, &m_engine,
           &QQmlApplicationEngine::retranslate);
 
+  // Obtain build date/time
+  const auto buildDate = QStringLiteral(__DATE__);
+  const auto buildTime = QStringLiteral(__TIME__);
+
   // Register C++ modules with QML
   const auto c = m_engine.rootContext();
   c->setContextProperty("Cpp_Updater", updater);
@@ -258,6 +294,8 @@ void Misc::ModuleManager::initializeQmlInterface()
   c->setContextProperty("Cpp_Misc_CommonFonts", miscCommonFonts);
   c->setContextProperty("Cpp_UpdaterEnabled", autoUpdaterEnabled());
   c->setContextProperty("Cpp_ModuleManager", this);
+  c->setContextProperty("Cpp_BuildDate", buildDate);
+  c->setContextProperty("Cpp_BuildTime", buildTime);
 
   // Register app info with QML
   c->setContextProperty("Cpp_AppName", qApp->applicationDisplayName());

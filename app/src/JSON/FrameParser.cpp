@@ -30,13 +30,44 @@
 
 #include "Misc/Utilities.h"
 #include "Misc/CommonFonts.h"
+#include "Misc/TimerEvents.h"
 #include "Misc/ThemeManager.h"
 
+/**
+ * Creates a subclass of @c QPlainTextEdit that allows us to call the given
+ * protected/private @a function and pass the given @a event as a parameter to
+ * the @a function.
+ */
+#define DW_EXEC_EVENT(pointer, function, event)                                \
+  class PwnedWidget : public QPlainTextEdit                                    \
+  {                                                                            \
+  public:                                                                      \
+    using QPlainTextEdit::function;                                            \
+  };                                                                           \
+  static_cast<PwnedWidget *>(pointer)->function(event);
+
+/**
+ * @brief Constructor function for the code editor widget.
+ */
 JSON::FrameParser::FrameParser(QQuickItem *parent)
-  : UI::DeclarativeWidget(parent)
+  : QQuickPaintedItem(parent)
 {
-  // Set widget
-  setWidget(&m_textEdit);
+  // Disable mipmap & antialiasing, we don't need them
+  setMipmap(false);
+  setAntialiasing(false);
+
+  // Disable alpha channel
+  setOpaquePainting(true);
+  setFillColor(Misc::ThemeManager::instance().getColor(QStringLiteral("base")));
+
+  // Widgets don't process touch events, disable it
+  setAcceptTouchEvents(false);
+
+  // Set item flags, we need these to forward Quick events to the widget
+  setFlag(ItemHasContents, true);
+  setFlag(ItemIsFocusScope, true);
+  setFlag(ItemAcceptsInputMethod, true);
+  setAcceptedMouseButtons(Qt::AllButtons);
 
   // Setup syntax highlighter
   m_highlighter = new QSourceHighlite::QSourceHighliter(m_textEdit.document());
@@ -69,8 +100,22 @@ JSON::FrameParser::FrameParser(QQuickItem *parent)
   // Bridge signals
   connect(&m_textEdit, &QPlainTextEdit::textChanged, this,
           &JSON::FrameParser::textChanged);
+
+  // Resize widget to fit QtQuick item
+  connect(this, &QQuickPaintedItem::widthChanged, this,
+          &JSON::FrameParser::resizeWidget);
+  connect(this, &QQuickPaintedItem::heightChanged, this,
+          &JSON::FrameParser::resizeWidget);
+
+  // Configure render loop
+  connect(&Misc::TimerEvents::instance(), &Misc::TimerEvents::timeout24Hz, this,
+          &JSON::FrameParser::renderWidget);
 }
 
+/**
+ * @brief Returns a string with the default frame parser function code.
+ * @return
+ */
 const QString &JSON::FrameParser::defaultCode()
 {
   static QString code;
@@ -87,16 +132,31 @@ const QString &JSON::FrameParser::defaultCode()
   return code;
 }
 
+/**
+ * @brief Returns the current text/data displayed in the code editor.
+ */
 QString JSON::FrameParser::text() const
 {
   return m_textEdit.document()->toPlainText();
 }
 
+/**
+ * @brief Indicates whenever there are any unsaved changes in the code editor.
+ * @return
+ */
 bool JSON::FrameParser::isModified() const
 {
   return m_textEdit.document()->isModified();
 }
 
+/**
+ * @brief Executes the current frame parser function over the input data.
+ *
+ * @param frame current/latest frame data.
+ * @param separator separator sequence to use.
+ *
+ * @return An array of strings with the values returned by the JS frame parser.
+ */
 QStringList JSON::FrameParser::parse(const QString &frame,
                                      const QString &separator)
 {
@@ -116,33 +176,53 @@ QStringList JSON::FrameParser::parse(const QString &frame,
   return list;
 }
 
+/**
+ * @brief Removes the selected text from the code editor widget and copies it
+ *        into the system's clipboard.
+ */
 void JSON::FrameParser::cut()
 {
   m_textEdit.cut();
 }
 
+/**
+ * @brief Undoes the last user's action.
+ */
 void JSON::FrameParser::undo()
 {
   m_textEdit.undo();
 }
 
+/**
+ * @brief Redoes an undone action.
+ */
 void JSON::FrameParser::redo()
 {
   m_textEdit.redo();
 }
 
+/**
+ * @brief Opens a website with documentation relevant to the frame parser.
+ */
 void JSON::FrameParser::help()
-{ // clang-format off
-  const auto url = QStringLiteral("https://github.com/Serial-Studio/Serial-Studio/wiki");
+{
+  // clang-format off
+  const auto url = QStringLiteral("https://github.com/Serial-Studio/Serial-Studio/wiki/Project-Editor#frame-parser-function-view");
   QDesktopServices::openUrl(QUrl(url));
   // clang-format on
 }
 
+/**
+ * @brief Copies the selected text into the system's clipboard.
+ */
 void JSON::FrameParser::copy()
 {
   m_textEdit.copy();
 }
 
+/**
+ * @brief Pastes data from the system's clipboard into the code editor.
+ */
 void JSON::FrameParser::paste()
 {
   if (m_textEdit.canPaste())
@@ -152,11 +232,17 @@ void JSON::FrameParser::paste()
   }
 }
 
+/**
+ * @brief Writes the current code into the project file.
+ */
 void JSON::FrameParser::apply()
 {
   save(true);
 }
 
+/**
+ * @brief Loads the default frame parser function into the code editor.
+ */
 void JSON::FrameParser::reload()
 {
   // Document has been modified, ask user if he/she wants to continue
@@ -175,6 +261,9 @@ void JSON::FrameParser::reload()
   save(true);
 }
 
+/**
+ * @brief Prompts the user to select a JS file to import into the code editor.
+ */
 void JSON::FrameParser::import()
 {
   // Document has been modified, ask user if he/she wants to continue
@@ -206,11 +295,18 @@ void JSON::FrameParser::import()
   }
 }
 
+/**
+ * @brief Selects all the text present in the code editor widget.
+ */
 void JSON::FrameParser::selectAll()
 {
   m_textEdit.selectAll();
 }
 
+/**
+ * @brief Modifies the palette of the code editor to match the colorscheme
+ *        of the currently loaded theme file.
+ */
 void JSON::FrameParser::onThemeChanged()
 {
   QPalette palette;
@@ -227,6 +323,13 @@ void JSON::FrameParser::onThemeChanged()
   m_textEdit.setPalette(palette);
 }
 
+/**
+ * @brief Validates the script and stores it into the project model.
+ * @param silent if set to @c false, the user shall be notified that the script
+ *               data was processed correctly.
+ *
+ * @return @c true on success, @c false on failure
+ */
 bool JSON::FrameParser::save(const bool silent)
 {
   // Update text edit
@@ -249,6 +352,20 @@ bool JSON::FrameParser::save(const bool silent)
   return false;
 }
 
+/**
+ * @brief Generates a callable JS function given the script code.
+ *
+ * This function validates that the given @a script data does not contain any
+ * syntax errors and that it can be executed by the JavaScript Engine.
+ *
+ * If the conditions required to execute the frame parser code are met, this
+ * function proceeds to generate a callable JS function that can be used
+ * by the rest of the application modules.
+ *
+ * @param script JavaScript code
+ *
+ * @return @a true if the JS code is valid and contains to errors
+ */
 bool JSON::FrameParser::loadScript(const QString &script)
 {
   // Ensure that engine is configured correctly
@@ -324,9 +441,159 @@ bool JSON::FrameParser::loadScript(const QString &script)
   return true;
 }
 
+/**
+ * @brief Loads the code stored in the project file into the code editor.
+ */
 void JSON::FrameParser::readCode()
 {
   m_textEdit.setPlainText(ProjectModel::instance().frameParserCode());
   m_textEdit.document()->setModified(false);
   loadScript(m_textEdit.toPlainText());
+}
+
+/**
+ * @brief Renders the widget as a pixmap, which is then painted in the QML
+ *        user interface.
+ */
+void JSON::FrameParser::renderWidget()
+{
+  if (isVisible())
+  {
+    m_pixmap = m_textEdit.grab();
+    update();
+  }
+}
+
+/**
+ * Resizes the widget to fit inside the QML painted item.
+ */
+void JSON::FrameParser::resizeWidget()
+{
+  if (width() > 0 && height() > 0)
+  {
+    m_textEdit.setFixedSize(width(), height());
+    renderWidget();
+  }
+}
+
+/**
+ * Displays the pixmap generated in the @c update() function in the QML
+ * interface through the given @a painter pointer.
+ */
+void JSON::FrameParser::paint(QPainter *painter)
+{
+  if (painter)
+    painter->drawPixmap(0, 0, m_pixmap);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::keyPressEvent(QKeyEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, keyPressEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::keyReleaseEvent(QKeyEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, keyReleaseEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::inputMethodEvent(QInputMethodEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, inputMethodEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::focusInEvent(QFocusEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, focusInEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::focusOutEvent(QFocusEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, focusOutEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::mousePressEvent(QMouseEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, mousePressEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::mouseMoveEvent(QMouseEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, mouseMoveEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::mouseReleaseEvent(QMouseEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, mouseReleaseEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::mouseDoubleClickEvent(QMouseEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, mouseDoubleClickEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::wheelEvent(QWheelEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, wheelEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::dragEnterEvent(QDragEnterEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, dragEnterEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::dragMoveEvent(QDragMoveEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, dragMoveEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::dragLeaveEvent(QDragLeaveEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, dragLeaveEvent, event);
+}
+
+/**
+ * Passes the given @param event to the contained widget (if any).
+ */
+void JSON::FrameParser::dropEvent(QDropEvent *event)
+{
+  DW_EXEC_EVENT(&m_textEdit, dropEvent, event);
 }

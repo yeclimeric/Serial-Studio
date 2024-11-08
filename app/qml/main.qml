@@ -24,6 +24,7 @@ import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
 
+import "Widgets" as Widgets
 import "Dialogs" as Dialogs
 import "MainWindow" as MainWindow
 import "ProjectEditor" as ProjectEditor
@@ -40,17 +41,22 @@ Item {
   }
 
   //
+  // Ask the user to save the project file before closing the app
+  //
+  function handleClose(close) {
+    close.accepted = false
+    if (Cpp_JSON_ProjectModel.askSave()) {
+      close.accepted = true
+      Qt.quit();
+    }
+  }
+
+  //
   // Main window + subdialogs
   //
   MainWindow.Root {
     id: mainWindow
-    onClosing: (close) => {
-                 close.accepted = false
-                 if (Cpp_JSON_ProjectModel.askSave()) {
-                   close.accepted = true
-                   Qt.quit()
-                 }
-               }
+    onClosing: (close) => app.handleClose(close)
 
     Dialogs.IconPicker {
       id: actionIconPicker
@@ -99,7 +105,7 @@ Item {
   // Dialog display functions
   //
   function showAboutDialog()       { aboutDialog.active = true }
-  function showProjectEditor()     { projectEditor.showNormal() }
+  function showProjectEditor()     { projectEditor.displayWindow() }
   function showExternalConsole()   { externalConsole.active = true }
   function showMqttConfiguration() { mqttConfiguration.active = true }
   function showAcknowledgements()  { acknowledgementsDialog.active = true }

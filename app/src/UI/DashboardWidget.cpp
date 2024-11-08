@@ -34,18 +34,23 @@
 #include "UI/Widgets/MultiPlot.h"
 #include "UI/Widgets/Accelerometer.h"
 
+#include "Misc/ThemeManager.h"
+
 /**
  * Constructor function
  */
 UI::DashboardWidget::DashboardWidget(QQuickItem *parent)
-  : DeclarativeWidget(parent)
+  : QQuickItem(parent)
   , m_index(-1)
-  , m_isGpsMap(false)
-  , m_widgetVisible(false)
-  , m_isExternalWindow(false)
+  , m_relativeIndex(-1)
+  , m_widgetType(WC::DashboardNoWidget)
+  , m_qmlPath("")
+  , m_dbWidget(nullptr)
 {
-  connect(&UI::Dashboard::instance(), &UI::Dashboard::widgetVisibilityChanged,
-          this, &UI::DashboardWidget::updateWidgetVisible);
+  connect(this, &UI::DashboardWidget::widgetIndexChanged, this,
+          &UI::DashboardWidget::widgetColorChanged);
+  connect(&Misc::ThemeManager::instance(), &Misc::ThemeManager::themeChanged,
+          this, &UI::DashboardWidget::widgetColorChanged);
 }
 
 /**
@@ -72,15 +77,22 @@ int UI::DashboardWidget::widgetIndex() const
  */
 int UI::DashboardWidget::relativeIndex() const
 {
-  return UI::Dashboard::instance().relativeIndex(widgetIndex());
+  return m_relativeIndex;
 }
 
 /**
- * Returns @c true if the QML interface should display this widget.
+ * Returns the color of the widget based on the current theme & widget index.
  */
-bool UI::DashboardWidget::widgetVisible() const
+QColor UI::DashboardWidget::widgetColor() const
 {
-  return m_widgetVisible;
+  static auto *dash = &UI::Dashboard::instance();
+  if (WC::isDatasetWidget(m_widgetType))
+  {
+    const auto &dataset = dash->getDatasetWidget(m_widgetType, m_relativeIndex);
+    return QColor(WC::getDatasetColor(dataset.index()));
+  }
+
+  return QColor::fromRgba(qRgba(0, 0, 0, 0));
 }
 
 /**
@@ -88,7 +100,7 @@ bool UI::DashboardWidget::widgetVisible() const
  */
 QString UI::DashboardWidget::widgetIcon() const
 {
-  return UI::Dashboard::instance().widgetIcon(widgetIndex());
+  return WC::dashboardWidgetIcon(m_widgetType);
 }
 
 /**
@@ -96,104 +108,44 @@ QString UI::DashboardWidget::widgetIcon() const
  */
 QString UI::DashboardWidget::widgetTitle() const
 {
-  if (widgetIndex() >= 0)
+  static auto *dash = &UI::Dashboard::instance();
+  if (WC::isDatasetWidget(m_widgetType))
   {
-    auto titles = UI::Dashboard::instance().widgetTitles();
-    if (widgetIndex() < titles.count())
-      return titles.at(widgetIndex());
+    const auto &dataset = dash->getDatasetWidget(m_widgetType, m_relativeIndex);
+    return dataset.title();
+  }
+
+  else if (WC::isGroupWidget(m_widgetType))
+  {
+    const auto &group = dash->getGroupWidget(m_widgetType, m_relativeIndex);
+    return group.title();
   }
 
   return tr("Invalid");
 }
 
 /**
- * If set to @c true, then the widget visibility shall be controlled
- * directly by the QML interface.
- *
- * If set to @c false, then the widget visbility shall be controlled
- * by the UI::Dashboard class via the SIGNAL/SLOT system.
- */
-bool UI::DashboardWidget::isExternalWindow() const
-{
-  return m_isExternalWindow;
-}
-
-/**
  * Returns the type of the current widget (e.g. group, plot, bar, gauge, etc...)
  */
-UI::Dashboard::WidgetType UI::DashboardWidget::widgetType() const
+WC::DashboardWidget UI::DashboardWidget::widgetType() const
 {
-  return UI::Dashboard::instance().widgetType(widgetIndex());
+  return m_widgetType;
 }
 
 /**
- * Hack: rendering a map is currently very hard on QtWidgets, so we
- * must use the QtLocation API (QML only) to display the map. Prevously, we
- * used QMapControl to render the satellite map, however, QMapControl does
- * not support the current mapping APIs and the project seems to have been
- * abandoned :(
- *
- * The quick and dirty solution is to break the nice abstraction that this
- * class provided and feed the GPS data from C++ to QML through this class.
- *
- * On the QML side, a QML Loader will be activated if (and only if) the
- * isGpsMap() function returns true, in turn, the QML loader will display
- * the GPS/Map widget and feed it the GPS data. Not nice, not cool, not
- * very efficient, but it is a fast solution for a problem that I don't
- * have too much time to fix (if I could pay my rent by writting FOSS,
- * believe me I would).
- *
- * Please ping me or make a PR if you find a better solution, or have
- * some free time to cleanup this fix.
+ * Returns the QML path of the current widget.
  */
-bool UI::DashboardWidget::isGpsMap() const
+QString UI::DashboardWidget::widgetQmlPath() const
 {
-  return m_isGpsMap;
+  return m_qmlPath;
 }
 
 /**
- * Returns the current GPS altitude indicated by the GPS "parser" widget,
- * this function only returns an useful value if @c isGpsMap() is @c true.
+ * Returns the model item of the current widget.
  */
-qreal UI::DashboardWidget::gpsAltitude() const
+QQuickItem *UI::DashboardWidget::widgetModel() const
 {
-  if (isGpsMap() && m_dbWidget)
-    return static_cast<Widgets::GPS *>(m_dbWidget)->altitude();
-
-  return 0;
-}
-
-/**
- * Returns the current GPS altitude indicated by the GPS "parser" widget,
- * this function only returns an useful value if @c isGpsMap() is @c true.
- */
-qreal UI::DashboardWidget::gpsLatitude() const
-{
-  if (isGpsMap() && m_dbWidget)
-    return static_cast<Widgets::GPS *>(m_dbWidget)->latitude();
-
-  return 0;
-}
-
-/**
- * Returns the current GPS altitude indicated by the GPS "parser" widget,
- * this function only returns an useful value if @c isGpsMap() is @c true.
- */
-qreal UI::DashboardWidget::gpsLongitude() const
-{
-  if (isGpsMap() && m_dbWidget)
-    return static_cast<Widgets::GPS *>(m_dbWidget)->longitude();
-
-  return 0;
-}
-
-/**
- * Changes the visibility & enabled status of the widget
- */
-void UI::DashboardWidget::setVisible(const bool visible)
-{
-  if (m_dbWidget)
-    m_dbWidget->setEnabled(visible);
+  return m_dbWidget;
 }
 
 /**
@@ -205,6 +157,8 @@ void UI::DashboardWidget::setWidgetIndex(const int index)
   {
     // Update widget index
     m_index = index;
+    m_widgetType = UI::Dashboard::instance().widgetType(index);
+    m_relativeIndex = UI::Dashboard::instance().relativeIndex(index);
 
     // Delete previous widget
     if (m_dbWidget)
@@ -213,45 +167,52 @@ void UI::DashboardWidget::setWidgetIndex(const int index)
       m_dbWidget = nullptr;
     }
 
-    // Initialize the GPS indicator flag to false by default
-    m_isGpsMap = false;
-
     // Construct new widget
     switch (widgetType())
     {
-      case UI::Dashboard::WidgetType::DataGrid:
-        m_dbWidget = new Widgets::DataGrid(relativeIndex());
+      case WC::DashboardDataGrid:
+        m_dbWidget = new Widgets::DataGrid(relativeIndex(), this);
+        m_qmlPath = "qrc:/app/qml/Widgets/Dashboard/DataGrid.qml";
         break;
-      case UI::Dashboard::WidgetType::MultiPlot:
-        m_dbWidget = new Widgets::MultiPlot(relativeIndex());
+      case WC::DashboardMultiPlot:
+        m_dbWidget = new Widgets::MultiPlot(relativeIndex(), this);
+        m_qmlPath = "qrc:/app/qml/Widgets/Dashboard/MultiPlot.qml";
         break;
-      case UI::Dashboard::WidgetType::FFT:
-        m_dbWidget = new Widgets::FFTPlot(relativeIndex());
+      case WC::DashboardFFT:
+        m_dbWidget = new Widgets::FFTPlot(relativeIndex(), this);
+        m_qmlPath = "qrc:/app/qml/Widgets/Dashboard/FFTPlot.qml";
         break;
-      case UI::Dashboard::WidgetType::Plot:
-        m_dbWidget = new Widgets::Plot(relativeIndex());
+      case WC::DashboardPlot:
+        m_dbWidget = new Widgets::Plot(relativeIndex(), this);
+        m_qmlPath = "qrc:/app/qml/Widgets/Dashboard/Plot.qml";
         break;
-      case UI::Dashboard::WidgetType::Bar:
-        m_dbWidget = new Widgets::Bar(relativeIndex());
+      case WC::DashboardBar:
+        m_dbWidget = new Widgets::Bar(relativeIndex(), this);
+        m_qmlPath = "qrc:/app/qml/Widgets/Dashboard/Bar.qml";
         break;
-      case UI::Dashboard::WidgetType::Gauge:
-        m_dbWidget = new Widgets::Gauge(relativeIndex());
+      case WC::DashboardGauge:
+        m_dbWidget = new Widgets::Gauge(relativeIndex(), this);
+        m_qmlPath = "qrc:/app/qml/Widgets/Dashboard/Gauge.qml";
         break;
-      case UI::Dashboard::WidgetType::Compass:
-        m_dbWidget = new Widgets::Compass(relativeIndex());
+      case WC::DashboardCompass:
+        m_dbWidget = new Widgets::Compass(relativeIndex(), this);
+        m_qmlPath = "qrc:/app/qml/Widgets/Dashboard/Compass.qml";
         break;
-      case UI::Dashboard::WidgetType::Gyroscope:
-        m_dbWidget = new Widgets::Gyroscope(relativeIndex());
+      case WC::DashboardGyroscope:
+        m_dbWidget = new Widgets::Gyroscope(relativeIndex(), this);
+        m_qmlPath = "qrc:/app/qml/Widgets/Dashboard/Gyroscope.qml";
         break;
-      case UI::Dashboard::WidgetType::Accelerometer:
-        m_dbWidget = new Widgets::Accelerometer(relativeIndex());
+      case WC::DashboardAccelerometer:
+        m_dbWidget = new Widgets::Accelerometer(relativeIndex(), this);
+        m_qmlPath = "qrc:/app/qml/Widgets/Dashboard/Accelerometer.qml";
         break;
-      case UI::Dashboard::WidgetType::GPS:
-        m_isGpsMap = true;
-        m_dbWidget = new Widgets::GPS(relativeIndex());
+      case WC::DashboardGPS:
+        m_dbWidget = new Widgets::GPS(relativeIndex(), this);
+        m_qmlPath = "qrc:/app/qml/Widgets/Dashboard/GPS.qml";
         break;
-      case UI::Dashboard::WidgetType::LED:
-        m_dbWidget = new Widgets::LEDPanel(relativeIndex());
+      case WC::DashboardLED:
+        m_dbWidget = new Widgets::LEDPanel(relativeIndex(), this);
+        m_qmlPath = "qrc:/app/qml/Widgets/Dashboard/LEDPanel.qml";
         break;
       default:
         break;
@@ -260,51 +221,8 @@ void UI::DashboardWidget::setWidgetIndex(const int index)
     // Configure widget
     if (m_dbWidget)
     {
-      setWidget(m_dbWidget);
-      updateWidgetVisible();
-
-      if (widgetType() == UI::Dashboard::WidgetType::GPS)
-      {
-        auto *gps = qobject_cast<Widgets::GPS *>(m_dbWidget);
-        if (gps)
-          connect(gps, &Widgets::GPS::updated, this,
-                  &UI::DashboardWidget::gpsDataChanged);
-      }
-
+      m_dbWidget->setParentItem(this);
       Q_EMIT widgetIndexChanged();
     }
-  }
-}
-
-/**
- * Changes the widget visibility controller source.
- *
- * If set to @c true, then the widget visibility shall be controlled
- * directly by the QML interface.
- *
- * If set to @c false, then the widget visbility shall be controlled
- * by the UI::Dashboard class via the SIGNAL/SLOT system.
- */
-void UI::DashboardWidget::setIsExternalWindow(const bool isWindow)
-{
-  m_isExternalWindow = isWindow;
-  Q_EMIT isExternalWindowChanged();
-}
-
-/**
- * Updates the visibility status of the current widget (this function is called
- * automatically by the UI::Dashboard class via signals/slots).
- */
-void UI::DashboardWidget::updateWidgetVisible()
-{
-  bool visible = UI::Dashboard::instance().widgetVisible(widgetIndex());
-
-  if (widgetVisible() != visible && !isExternalWindow())
-  {
-    m_widgetVisible = visible;
-    if (m_dbWidget)
-      m_dbWidget->setEnabled(visible);
-
-    Q_EMIT widgetVisibleChanged();
   }
 }

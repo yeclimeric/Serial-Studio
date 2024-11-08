@@ -108,9 +108,9 @@
         <file>actions/Xbox Y.svg</file>
         <file>actions/Zoom In.svg</file>
         <file>actions/Zoom Out.svg</file>
-        <file>fonts/Inter-Bold.ttf</file>
-        <file>fonts/Inter-Regular.ttf</file>
+        <file>fonts/NotoSans.ttf</file>
         <file>fonts/NotoSansMono.ttf</file>
+        <file>fonts/NotoSansSC.ttf</file>
         <file>icons/buttons/apply.svg</file>
         <file>icons/buttons/center.svg</file>
         <file>icons/buttons/clear.svg</file>
@@ -221,6 +221,7 @@
         <file>icons/toolbar/structure.svg</file>
         <file>images/action.svg</file>
         <file>images/code.svg</file>
+        <file>images/crosshair.svg</file>
         <file>images/donate-qr.svg</file>
         <file>images/drag-and-drop.svg</file>
         <file>images/hammer.svg</file>
@@ -231,6 +232,12 @@
         <file>images/soldering-iron.svg</file>
         <file>images/tip.svg</file>
         <file>images/tree.svg</file>
+        <file>instruments/attitude_crosshair.svg</file>
+        <file>instruments/attitude_dial.svg</file>
+        <file>instruments/attitude_pointer.svg</file>
+        <file>instruments/compass_background.svg</file>
+        <file>instruments/compass_case.svg</file>
+        <file>instruments/compass_needle.svg</file>
         <file>messages/Acknowledgements.txt</file>
         <file>messages/Welcome_DE.txt</file>
         <file>messages/Welcome_EN.txt</file>
@@ -241,11 +248,18 @@
         <file>scripts/frame-parser.js</file>
         <file>themes/Breeze Dark.json</file>
         <file>themes/Breeze Light.json</file>
+        <file>themes/Deep Blue.json</file>
+        <file>themes/Deep Green.json</file>
+        <file>themes/Deep Purple.json</file>
+        <file>themes/Deep Red.json</file>
         <file>themes/Default.json</file>
+        <file>themes/Dominion.json</file>
         <file>themes/macOS Dark.json</file>
         <file>themes/macOS Light.json</file>
         <file>themes/Outdoor Day.json</file>
         <file>themes/Outdoor Night.json</file>
+        <file>themes/Pulse.json</file>
+        <file>themes/Resistance.json</file>
         <file>themes/Yaru Dark.json</file>
         <file>themes/Yaru Light.json</file>
     </qresource>

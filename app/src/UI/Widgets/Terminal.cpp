@@ -85,6 +85,11 @@ Widgets::Terminal::Terminal(QQuickItem *parent)
   setFlag(ItemAcceptsInputMethod, true);
   setAcceptedMouseButtons(Qt::AllButtons);
 
+  // Set rendering hints
+  setMipmap(false);
+  setAntialiasing(true);
+  setOpaquePainting(true);
+
   // Set font
   setFont(Misc::CommonFonts::instance().monoFont());
 
@@ -103,6 +108,12 @@ Widgets::Terminal::Terminal(QQuickItem *parent)
       clear();
   });
 
+  // Redraw widget as soon as it is visible
+  connect(this, &Widgets::Terminal::visibleChanged, this, [=] {
+    if (isVisible())
+      update();
+  });
+
   // Change character widths when changing language
   connect(&Misc::Translator::instance(), &Misc::Translator::languageChanged,
           this, [=] { setFont(Misc::CommonFonts::instance().monoFont()); });
@@ -113,9 +124,16 @@ Widgets::Terminal::Terminal(QQuickItem *parent)
   connect(&m_cursorTimer, &QTimer::timeout, this,
           &Widgets::Terminal::toggleCursor);
 
-  // Redraw the widget at 24 Hz... no more, no less
+  // Redraw the widget at 24 Hz and only when necessary
+  m_stateChanged = true;
   connect(&Misc::TimerEvents::instance(), &Misc::TimerEvents::timeout24Hz, this,
-          [=] { update(); });
+          [=] {
+            if (isVisible() && m_stateChanged)
+            {
+              m_stateChanged = false;
+              update();
+            }
+          });
 }
 
 /**
@@ -142,17 +160,12 @@ Widgets::Terminal::Terminal(QQuickItem *parent)
 void Widgets::Terminal::paint(QPainter *painter)
 {
   // Skip if item is not visible
-  if (!isVisible())
+  if (!isVisible() || !painter)
     return;
 
   // Set font and prepare painter
   painter->setFont(m_font);
   int lineHeight = m_cHeight;
-
-  // Draw background and border
-  QRect terminalRect(0, 0, width(), height());
-  painter->fillRect(terminalRect, m_palette.color(QPalette::Base));
-  painter->drawRect(terminalRect);
 
   // Calculate the range of lines to be painted
   const int firstLine = m_scrollOffsetY;
@@ -568,6 +581,7 @@ void Widgets::Terminal::clear()
   initBuffer();
   setCursorPosition(0, 0);
   setAutoscroll(true);
+  m_stateChanged = true;
 }
 
 /**
@@ -595,6 +609,7 @@ void Widgets::Terminal::selectAll()
   m_selectionStartCursor = m_selectionStart;
 
   // Emit signal to indicate that the selection has changed
+  m_stateChanged = true;
   Q_EMIT selectionChanged();
 }
 
@@ -612,6 +627,9 @@ void Widgets::Terminal::setFont(const QFont &font)
   // Update font
   m_font = font;
 
+  // Ensure that antialiasing is enabled
+  m_font.setStyleStrategy(QFont::PreferAntialias);
+
   // Get size of font (in pixels)
   auto metrics = QFontMetrics(font);
 
@@ -620,7 +638,7 @@ void Widgets::Terminal::setFont(const QFont &font)
   m_cWidth = metrics.averageCharWidth();
 
   // Special case for Chinese
-  if (Misc::Translator::instance().language() == 2)
+  if (Misc::Translator::instance().language() == Misc::Translator::Chinese)
     m_cWidth = font.pixelSize();
 
   // Update terminal border
@@ -701,6 +719,7 @@ void Widgets::Terminal::setVt100Emulation(const bool enabled)
  */
 void Widgets::Terminal::toggleCursor()
 {
+  m_stateChanged = true;
   m_cursorVisible = !m_cursorVisible;
 }
 
@@ -717,11 +736,13 @@ void Widgets::Terminal::toggleCursor()
 void Widgets::Terminal::onThemeChanged()
 {
   // clang-format off
+  m_stateChanged = true;
   const auto theme = &Misc::ThemeManager::instance();
   m_palette.setColor(QPalette::Text, theme->getColor("console_text"));
   m_palette.setColor(QPalette::Base, theme->getColor("console_base"));
   m_palette.setColor(QPalette::Window, theme->getColor("console_border"));
   m_palette.setColor(QPalette::Highlight, theme->getColor("console_highlight"));
+  setFillColor(m_palette.color(QPalette::Base));
   update();
   // clang-format on
 }
@@ -769,6 +790,7 @@ void Widgets::Terminal::append(const QString &data)
   }
 
   appendString(text);
+  m_stateChanged = true;
 }
 
 /**
@@ -809,7 +831,7 @@ void Widgets::Terminal::appendString(const QString &string)
   }
 
   // Adjust the scroll offset if autoscroll is enabled
-  if (autoscroll() && isVisible())
+  if (autoscroll())
   {
     // Calculate the total number of wrapped lines for the current line
     int cursorLine = m_cursorPosition.y();
@@ -825,7 +847,8 @@ void Widgets::Terminal::appendString(const QString &string)
 
     // Set the scroll offset to ensure the bottom of the wrapped line is visible
     m_scrollOffsetY = qMax(0, visualBottom - linesPerPage() + 1);
-    Q_EMIT scrollOffsetYChanged();
+    if (isVisible())
+      Q_EMIT scrollOffsetYChanged();
   }
 }
 
@@ -1335,6 +1358,7 @@ void Widgets::Terminal::wheelEvent(QWheelEvent *event)
     setScrollOffsetY(offset);
   }
 
+  m_stateChanged = true;
   event->accept();
 }
 
@@ -1377,6 +1401,7 @@ void Widgets::Terminal::mouseMoveEvent(QMouseEvent *event)
     m_selectionEnd = currentCursorPos;
   }
 
+  m_stateChanged = true;
   Q_EMIT selectionChanged();
 }
 
@@ -1402,6 +1427,7 @@ void Widgets::Terminal::mousePressEvent(QMouseEvent *event)
     m_selectionStartCursor = positionToCursor(event->pos());
     m_selectionStart = m_selectionStartCursor;
     m_selectionEnd = m_selectionStartCursor;
+    m_stateChanged = true;
     Q_EMIT selectionChanged();
   }
 }
@@ -1432,6 +1458,7 @@ void Widgets::Terminal::mouseReleaseEvent(QMouseEvent *event)
 
     m_selectionStartCursor = QPoint();
     m_mouseTracking = false;
+    m_stateChanged = true;
     Q_EMIT selectionChanged();
   }
 }
@@ -1478,7 +1505,7 @@ void Widgets::Terminal::mouseDoubleClickEvent(QMouseEvent *event)
     m_selectionEnd = QPoint(wordEndX, cursorPos.y());
 
     // Update view to reflect the selection
+    m_stateChanged = true;
     Q_EMIT selectionChanged();
-    return;
   }
 }

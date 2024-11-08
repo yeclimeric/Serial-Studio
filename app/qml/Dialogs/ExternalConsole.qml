@@ -25,7 +25,7 @@ import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
 
-import "../Widgets" as Widgets
+import "../Widgets/Dashboard" as Dashboard
 
 Window {
   id: root
@@ -39,7 +39,6 @@ Window {
   Component.onCompleted: {
     root.flags = Qt.Dialog |
         Qt.WindowTitleHint |
-        Qt.WindowStaysOnTopHint |
         Qt.WindowCloseButtonHint
   }
 
@@ -51,9 +50,6 @@ Window {
     if (visible) {
       Cpp_NativeWindow.addWindow(root, Cpp_ThemeManager.colors["base"])
       root.titlebarHeight = Cpp_NativeWindow.titlebarHeight(root)
-
-      x = (Screen.desktopAvailableWidth - width) / 2
-      y = (Screen.desktopAvailableHeight - height) / 2
     }
 
     else {
@@ -141,7 +137,7 @@ Window {
     palette.placeholderText: Cpp_ThemeManager.colors["placeholder_text"]
     palette.highlightedText: Cpp_ThemeManager.colors["highlighted_text"]
 
-    Widgets.Terminal {
+    Dashboard.Terminal {
       anchors.margins: 8
       anchors.fill: parent
     }

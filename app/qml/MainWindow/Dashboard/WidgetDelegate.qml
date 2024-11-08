@@ -55,6 +55,7 @@ Widgets.Pane {
   //
   DashboardWidget {
     id: widget
+    clip: true
     visible: root.active
     anchors.fill: parent
     anchors.topMargin: -16
@@ -63,15 +64,30 @@ Widgets.Pane {
     anchors.bottomMargin: -7
     widgetIndex: root.widgetIndex
 
-    Loader {
+    Rectangle {
       anchors.fill: parent
+      color: Cpp_ThemeManager.colors["widget_window"]
+    }
+
+    Loader {
+      id: loader
       asynchronous: true
-      active: widget.isGpsMap
-      visible: widget.isGpsMap && status == Loader.Ready
-      sourceComponent: Widgets.GpsMap {
-        altitude: widget.gpsAltitude
-        latitude: widget.gpsLatitude
-        longitude: widget.gpsLongitude
+      anchors.fill: parent
+      source: widget.widgetQmlPath
+      onLoaded: {
+        if (item && widget.widgetModel) {
+          item.color = widget.widgetColor
+          item.model = widget.widgetModel
+        }
+      }
+
+      Connections {
+        target: Cpp_ThemeManager
+
+        function onThemeChanged() {
+          if (loader.item !== null)
+            loader.item.color = widget.widgetColor
+        }
       }
     }
   }
@@ -100,8 +116,15 @@ Widgets.Pane {
       Component.onCompleted: {
         window.flags = Qt.Dialog |
             Qt.WindowTitleHint |
-            Qt.WindowStaysOnTopHint |
             Qt.WindowCloseButtonHint
+      }
+
+      //
+      // Close window instead of app
+      //
+      Shortcut {
+        sequences: [StandardKey.Close]
+        onActivated: window.close()
       }
 
       //
@@ -118,7 +141,7 @@ Widgets.Pane {
       property real titlebarHeight: 0
       onVisibleChanged: {
         if (visible) {
-          Cpp_NativeWindow.addWindow(window, Cpp_ThemeManager.colors["widget_base"])
+          Cpp_NativeWindow.addWindow(window, Cpp_ThemeManager.colors["widget_window"])
           window.titlebarHeight = Cpp_NativeWindow.titlebarHeight(window)
         }
       }
@@ -128,7 +151,7 @@ Widgets.Pane {
       //
       Rectangle {
         anchors.fill: parent
-        color: Cpp_ThemeManager.colors["widget_base"]
+        color: Cpp_ThemeManager.colors["widget_window"]
 
         //
         // Drag the window anywhere
@@ -170,14 +193,24 @@ Widgets.Pane {
         anchors.topMargin: window.titlebarHeight
 
         Loader {
-          anchors.fill: parent
+          id: windowWidgetLoader
           asynchronous: true
-          active: windowWidget.isGpsMap
-          visible: windowWidget.isGpsMap && status == Loader.Ready
-          sourceComponent: Widgets.GpsMap {
-            altitude: windowWidget.gpsAltitude
-            latitude: windowWidget.gpsLatitude
-            longitude: windowWidget.gpsLongitude
+          anchors.fill: parent
+          source: windowWidget.widgetQmlPath
+          onLoaded: {
+            if (item && windowWidget.widgetModel) {
+              item.color = windowWidget.widgetColor
+              item.model = windowWidget.widgetModel
+            }
+          }
+
+          Connections {
+            target: Cpp_ThemeManager
+
+            function onThemeChanged() {
+              if (windowWidgetLoader.item !== null)
+                windowWidgetLoader.item.color = windowWidget.widgetColor
+            }
           }
         }
       }
