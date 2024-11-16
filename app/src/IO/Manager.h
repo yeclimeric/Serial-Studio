@@ -24,6 +24,7 @@
 
 #include <QThread>
 #include <QObject>
+#include <QByteArray>
 
 #include "HAL_Driver.h"
 #include "FrameReader.h"
@@ -58,11 +59,11 @@ class Manager : public QObject
              READ busType
              WRITE setBusType
              NOTIFY busTypeChanged)
-  Q_PROPERTY(QString startSequence
+  Q_PROPERTY(QByteArray startSequence
              READ startSequence
              WRITE setStartSequence
              NOTIFY startSequenceChanged)
-  Q_PROPERTY(QString finishSequence
+  Q_PROPERTY(QByteArray finishSequence
              READ finishSequence
              WRITE setFinishSequence
              NOTIFY finishSequenceChanged)
@@ -106,8 +107,8 @@ public:
   [[nodiscard]] HAL_Driver *driver();
   [[nodiscard]] SerialStudio::BusType busType() const;
 
-  [[nodiscard]] const QString &startSequence() const;
-  [[nodiscard]] const QString &finishSequence() const;
+  [[nodiscard]] const QByteArray &startSequence() const;
+  [[nodiscard]] const QByteArray &finishSequence() const;
 
   [[nodiscard]] QStringList availableBuses() const;
   Q_INVOKABLE qint64 writeData(const QByteArray &data);
@@ -119,8 +120,8 @@ public slots:
   void setupExternalConnections();
   void setWriteEnabled(const bool enabled);
   void processPayload(const QByteArray &payload);
-  void setStartSequence(const QString &sequence);
-  void setFinishSequence(const QString &sequence);
+  void setStartSequence(const QByteArray &sequence);
+  void setFinishSequence(const QByteArray &sequence);
   void setBusType(const SerialStudio::BusType &driver);
 
 private slots:
@@ -134,7 +135,7 @@ private:
   QThread m_workerThread;
   FrameReader m_frameReader;
 
-  QString m_startSequence;
-  QString m_finishSequence;
+  QByteArray m_startSequence;
+  QByteArray m_finishSequence;
 };
 } // namespace IO

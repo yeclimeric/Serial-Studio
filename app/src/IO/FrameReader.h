@@ -68,8 +68,8 @@ public slots:
   void setupExternalConnections();
   void processData(const QByteArray &data);
   void setMaxBufferSize(const qsizetype size);
-  void setStartSequence(const QString &start);
-  void setFinishSequence(const QString &finish);
+  void setStartSequence(const QByteArray &data);
+  void setFinishSequence(const QByteArray &data);
   void setOperationMode(const SerialStudio::OperationMode mode);
   void setFrameDetectionMode(const SerialStudio::FrameDetection mode);
 

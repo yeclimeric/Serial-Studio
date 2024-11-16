@@ -32,6 +32,32 @@
 #include "JSON/FrameBuilder.h"
 
 /**
+ * @brief Converts C-style escape sequences in a string to their actual values.
+ *
+ * This function processes a string to replace escape sequences (e.g., "\\n")
+ * with their corresponding character values ("\n"). It is useful for handling
+ * user input in a format compatible with C escape sequences.
+ *
+ * @param str The input string containing escape sequences.
+ * @return A string with escape sequences replaced by their actual values.
+ *
+ * @note Currently supports basic escape sequences. Numbers are not yet
+ *       supported (TODO).
+ */
+static QString ADD_ESCAPE_SEQUENCES(const QString &str)
+{
+  auto escapedStr = str;
+  escapedStr = escapedStr.replace(QStringLiteral("\\a"), QStringLiteral("\a"));
+  escapedStr = escapedStr.replace(QStringLiteral("\\b"), QStringLiteral("\b"));
+  escapedStr = escapedStr.replace(QStringLiteral("\\f"), QStringLiteral("\f"));
+  escapedStr = escapedStr.replace(QStringLiteral("\\n"), QStringLiteral("\n"));
+  escapedStr = escapedStr.replace(QStringLiteral("\\r"), QStringLiteral("\r"));
+  escapedStr = escapedStr.replace(QStringLiteral("\\t"), QStringLiteral("\t"));
+  escapedStr = escapedStr.replace(QStringLiteral("\\v"), QStringLiteral("\v"));
+  return escapedStr;
+}
+
+/**
  * Initializes the JSON Parser class and connects appropiate SIGNALS/SLOTS
  */
 JSON::FrameBuilder::FrameBuilder()
@@ -45,6 +71,29 @@ JSON::FrameBuilder::FrameBuilder()
   // Obtain operation mode from settings
   auto m = m_settings.value("operation_mode", SerialStudio::QuickPlot).toInt();
   setOperationMode(static_cast<SerialStudio::OperationMode>(m));
+}
+
+QByteArray JSON::FrameBuilder::convertFrameSeparator(const QString &str)
+{
+  auto seq =ADD_ESCAPE_SEQUENCES(str);
+  if (seq.isEmpty())
+    seq = QStringLiteral("/*");
+
+  QByteArray ret;
+  switch(m_frame.decoder()){
+    case SerialStudio::Hexadecimal:
+      ret = QByteArray::fromHex(seq.toLatin1());;
+      break;
+    case SerialStudio::Base64:
+      ret = QByteArray::fromBase64(seq.toLatin1());
+      break;
+    default:
+      ret = seq.toUtf8();
+      break;
+  }
+
+  return ret;
+
 }
 
 /**
@@ -165,8 +214,8 @@ void JSON::FrameBuilder::loadJsonMap(const QString &path)
       {
         if (operationMode() == SerialStudio::ProjectFile)
         {
-          IO::Manager::instance().setFinishSequence(m_frame.frameEnd());
-          IO::Manager::instance().setStartSequence(m_frame.frameStart());
+          IO::Manager::instance().setFinishSequence(convertFrameSeparator(m_frame.frameEnd()));
+          IO::Manager::instance().setStartSequence(convertFrameSeparator(m_frame.frameStart()));
         }
       }
 
@@ -232,8 +281,8 @@ void JSON::FrameBuilder::setOperationMode(
       IO::Manager::instance().setFinishSequence("");
       break;
     case SerialStudio::ProjectFile:
-      IO::Manager::instance().setFinishSequence(m_frame.frameEnd());
-      IO::Manager::instance().setStartSequence(m_frame.frameStart());
+      IO::Manager::instance().setFinishSequence(convertFrameSeparator(m_frame.frameEnd()));
+      IO::Manager::instance().setStartSequence(convertFrameSeparator(m_frame.frameStart()));
       break;
     case SerialStudio::QuickPlot:
       IO::Manager::instance().setStartSequence("");

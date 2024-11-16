@@ -29,6 +29,7 @@
 #include <QJsonObject>
 #include <JSON/Group.h>
 #include <JSON/Action.h>
+#include "SerialStudio.h"
 
 namespace JSON
 {
@@ -68,6 +69,7 @@ public:
   [[nodiscard]] int groupCount() const;
 
   [[nodiscard]] const QString &title() const;
+  [[nodiscard]] const SerialStudio::DecoderMethod &decoder() const;
   [[nodiscard]] const QString &frameEnd() const;
   [[nodiscard]] const QString &separator() const;
   [[nodiscard]] const QString &frameStart() const;
@@ -77,6 +79,7 @@ public:
 
 private:
   QString m_title;
+  SerialStudio::DecoderMethod m_decoder;
   QString m_frameEnd;
   QString m_separator;
   QString m_frameStart;

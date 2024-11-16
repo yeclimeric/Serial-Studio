@@ -105,6 +105,7 @@ bool JSON::Frame::read(const QJsonObject &object)
   {
     // Update title
     m_title = title;
+    m_decoder = static_cast<SerialStudio::DecoderMethod>(object.value(QStringLiteral("decoder")).toInt());
     m_frameEnd = object.value(QStringLiteral("frameEnd")).toString();
     m_separator = object.value(QStringLiteral("separator")).toString();
     m_frameStart = object.value(QStringLiteral("frameStart")).toString();
@@ -148,6 +149,14 @@ int JSON::Frame::groupCount() const
 const QString &JSON::Frame::title() const
 {
   return m_title;
+}
+
+/**
+ * Returns the decoder method of the frame.
+ */
+const SerialStudio::DecoderMethod &JSON::Frame::decoder() const
+{
+  return m_decoder;
 }
 
 /**

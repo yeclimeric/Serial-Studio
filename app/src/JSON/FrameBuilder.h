@@ -75,6 +75,7 @@ private:
   FrameBuilder(const FrameBuilder &) = delete;
   FrameBuilder &operator=(FrameBuilder &&) = delete;
   FrameBuilder &operator=(const FrameBuilder &) = delete;
+  QByteArray convertFrameSeparator(const QString &str);
 
 public:
   static FrameBuilder &instance();

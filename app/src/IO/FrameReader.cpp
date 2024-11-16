@@ -221,9 +221,8 @@ void IO::FrameReader::setMaxBufferSize(const qsizetype size)
  *
  * @param start The new start sequence as a QString.
  */
-void IO::FrameReader::setStartSequence(const QString &start)
+void IO::FrameReader::setStartSequence(const QByteArray &data)
 {
-  const auto data = start.toUtf8();
   if (m_startSequence != data)
   {
     m_startSequence = data;
@@ -239,9 +238,8 @@ void IO::FrameReader::setStartSequence(const QString &start)
  *
  * @param finish The new finish sequence as a QString.
  */
-void IO::FrameReader::setFinishSequence(const QString &finish)
+void IO::FrameReader::setFinishSequence(const QByteArray &data)
 {
-  const auto data = finish.toUtf8();
   if (m_finishSequence != data)
   {
     m_finishSequence = data;
@@ -388,16 +386,31 @@ qsizetype IO::FrameReader::readStartEndDelimetedFrames()
       break;
 
     // Get end index
-    int fIndex = m_dataBuffer.indexOf(m_finishSequence,
-                                      sIndex + m_startSequence.size());
-    if (fIndex == -1)
-      break;
+    int fIndex = -1;
+    if(m_finishSequence.isEmpty()){
+      fIndex = m_dataBuffer.indexOf(m_startSequence,
+                                    sIndex + m_startSequence.size());
+      if (fIndex == -1)
+        break;
+    }else{
+      fIndex = m_dataBuffer.indexOf(m_finishSequence,
+                                    sIndex + m_startSequence.size());
+
+      if (fIndex == -1)
+        break;
+      if(m_finishSequence != QString("*/").toLatin1()){
+        fIndex += m_finishSequence.size();
+      }
+    }
 
     // Extract the frame between start and finish sequences
-    int frameStart = sIndex + m_startSequence.size();
+    int frameStart = m_startSequence != QString("/*").toLatin1() ?
+                              sIndex : sIndex + m_startSequence.size();
     int frameLength = fIndex - frameStart;
     QByteArray frame = m_dataBuffer.mid(frameStart, frameLength);
 
+    int finishSeqOffset = m_finishSequence == QString("*/").toLatin1() ?
+                              m_finishSequence.size() : 0;
     // Parse frame if not empty
     if (!frame.isEmpty())
     {
@@ -407,7 +420,7 @@ qsizetype IO::FrameReader::readStartEndDelimetedFrames()
       if (result == ValidationStatus::FrameOk)
       {
         Q_EMIT frameReady(frame);
-        bytesProcessed = fIndex + m_finishSequence.size() + chop;
+        bytesProcessed = fIndex + finishSeqOffset + chop;
       }
 
       // Incomplete data; wait for more data
@@ -416,12 +429,12 @@ qsizetype IO::FrameReader::readStartEndDelimetedFrames()
 
       // Invalid frame; skip past finish sequence
       else
-        bytesProcessed = fIndex + m_finishSequence.size() + chop;
+        bytesProcessed = fIndex + finishSeqOffset + chop;
     }
 
     // Empty frame; move past the finish sequence
     else
-      bytesProcessed = fIndex + m_finishSequence.size();
+      bytesProcessed = fIndex + finishSeqOffset;
   }
 
   // Return number of bytes read
