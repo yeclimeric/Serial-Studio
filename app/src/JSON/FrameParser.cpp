@@ -24,6 +24,7 @@
 #include <QJSEngine>
 #include <QFileDialog>
 #include <QDesktopServices>
+#include <QRegularExpression>
 
 #include "JSON/FrameParser.h"
 #include "JSON/ProjectModel.h"
@@ -91,6 +92,10 @@ JSON::FrameParser::FrameParser(QQuickItem *parent)
   // Connect modification check signals
   connect(m_textEdit.document(), &QTextDocument::modificationChanged, this,
           [=] { Q_EMIT modifiedChanged(); });
+  connect(this, &JSON::FrameParser::modifiedChanged, this, [=] {
+    if (isModified() && !JSON::ProjectModel::instance().modified())
+      JSON::ProjectModel::instance().setModified(true);
+  });
 
   // Load code from JSON model automatically
   connect(&JSON::ProjectModel::instance(),
@@ -153,16 +158,14 @@ bool JSON::FrameParser::isModified() const
  * @brief Executes the current frame parser function over the input data.
  *
  * @param frame current/latest frame data.
- * @param separator separator sequence to use.
  *
  * @return An array of strings with the values returned by the JS frame parser.
  */
-QStringList JSON::FrameParser::parse(const QString &frame,
-                                     const QString &separator)
+QStringList JSON::FrameParser::parse(const QString &frame)
 {
   // Construct function arguments
   QJSValueList args;
-  args << frame << separator;
+  args << frame;
 
   // Evaluate frame parsing function
   auto out = m_parseFunction.call(args).toVariant().toStringList();
@@ -174,6 +177,165 @@ QStringList JSON::FrameParser::parse(const QString &frame,
 
   // Return fields list
   return list;
+}
+
+/**
+ * @brief Validates the script and stores it into the project model.
+ * @param silent if set to @c false, the user shall be notified that the script
+ *               data was processed correctly.
+ *
+ * @return @c true on success, @c false on failure
+ */
+bool JSON::FrameParser::save(const bool silent)
+{
+  // Update text edit
+  if (loadScript(m_textEdit.toPlainText()))
+  {
+    m_textEdit.document()->setModified(false);
+    ProjectModel::instance().setFrameParserCode(m_textEdit.toPlainText());
+
+    // Show save messagebox
+    if (!silent)
+      Misc::Utilities::showMessageBox(
+          tr("Frame parser code updated successfully!"),
+          tr("No errors have been detected in the code."));
+
+    // Everything good
+    return true;
+  }
+
+  // Something did not work quite right
+  return false;
+}
+
+/**
+ * @brief Generates a callable JS function given the script code.
+ *
+ * This function validates that the given @a script data does not contain any
+ * syntax errors and that it can be executed by the JavaScript Engine.
+ *
+ * If the conditions required to execute the frame parser code are met, this
+ * function proceeds to generate a callable JS function that can be used
+ * by the rest of the application modules.
+ *
+ * @param script JavaScript code
+ *
+ * @return @a true if the JS code is valid and contains to errors
+ */
+bool JSON::FrameParser::loadScript(const QString &script)
+{
+  // Ensure that engine is configured correctly
+  m_engine.installExtensions(QJSEngine::ConsoleExtension
+                             | QJSEngine::GarbageCollectionExtension);
+
+  // Check if there are no general JS errors
+  QStringList errors;
+  m_engine.evaluate(script, "", 1, &errors);
+
+  // Check if the 'parse' function exists and is callable
+  auto fun = m_engine.globalObject().property("parse");
+  if (fun.isNull() || !fun.isCallable())
+  {
+    Misc::Utilities::showMessageBox(
+        tr("Frame parser error!"),
+        tr("The 'parse' function is not declared or is not callable!"));
+    return false;
+  }
+
+  // Check if the script contains a valid parse function declaratio
+  static QRegularExpression functionRegex(
+      R"(\bfunction\s+parse\s*\(\s*([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*,\s*([a-zA-Z_$][a-zA-Z0-9_$]*))?\s*\))");
+  auto match = functionRegex.match(script);
+  if (match.hasMatch())
+  {
+    // Extract argument names
+    QString firstArg = match.captured(1);
+    QString secondArg = match.captured(3);
+
+    // Warn about empty first argument
+    if (firstArg.isEmpty())
+    {
+      Misc::Utilities::showMessageBox(
+          tr("Frame parser error!"),
+          tr("No valid 'parse' function declaration found in the script!"));
+      return false;
+    }
+
+    // Warn about deprecated second argument
+    if (!secondArg.isEmpty())
+    {
+      Misc::Utilities::showMessageBox(
+          tr("Legacy frame parser function detected"),
+          tr("The 'parse' function has two arguments ('%1', '%2'), indicating "
+             "use of the old format. Please update it to the new format, which "
+             "only takes the frame data as an argument.")
+              .arg(firstArg, secondArg));
+      return false;
+    }
+  }
+
+  // Function doesn't match the expected declaration
+  else
+  {
+    Misc::Utilities::showMessageBox(
+        tr("Frame parser error!"),
+        tr("No valid 'parse' function declaration found in the script!"));
+    return false;
+  }
+
+  // Try to run parse() function
+  QJSValueList args = {""};
+  auto ret = fun.call(args);
+
+  // Error on engine evaluation
+  if (!errors.isEmpty())
+  {
+    Misc::Utilities::showMessageBox(
+        tr("Frame parser syntax error!"),
+        tr("Error on line %1.").arg(errors.first()));
+    return false;
+  }
+
+  // Error on function execution
+  else if (ret.isError())
+  {
+    QString errorStr;
+    switch (ret.errorType())
+    {
+      case QJSValue::GenericError:
+        errorStr = tr("Generic error");
+        break;
+      case QJSValue::EvalError:
+        errorStr = tr("Evaluation error");
+        break;
+      case QJSValue::RangeError:
+        errorStr = tr("Range error");
+        break;
+      case QJSValue::ReferenceError:
+        errorStr = tr("Reference error");
+        break;
+      case QJSValue::SyntaxError:
+        errorStr = tr("Syntax error");
+        break;
+      case QJSValue::TypeError:
+        errorStr = tr("Type error");
+        break;
+      case QJSValue::URIError:
+        errorStr = tr("URI error");
+        break;
+      default:
+        errorStr = tr("Unknown error");
+        break;
+    }
+
+    Misc::Utilities::showMessageBox(tr("Frame parser error detected!"),
+                                    errorStr);
+    return false;
+  }
+
+  // We have reached this point without any errors, set function caller
+  m_parseFunction = fun;
+  return true;
 }
 
 /**
@@ -237,7 +399,21 @@ void JSON::FrameParser::paste()
  */
 void JSON::FrameParser::apply()
 {
-  save(false);
+  if (save(false))
+  {
+    auto &model = JSON::ProjectModel::instance();
+    if (!model.jsonFilePath().isEmpty())
+    {
+      const bool modified = model.modified();
+      const bool hasGroups = model.groupCount() > 0;
+      const bool hasDatasets = model.datasetCount() > 0;
+      if (modified && hasGroups && hasDatasets)
+      {
+        model.saveJsonFile();
+        model.displayFrameParserView();
+      }
+    }
+  }
 }
 
 /**
@@ -258,7 +434,7 @@ void JSON::FrameParser::reload()
 
   // Load default template
   m_textEdit.setPlainText(defaultCode());
-  save(true);
+  (void)save(true);
 }
 
 /**
@@ -290,8 +466,23 @@ void JSON::FrameParser::import()
     {
       auto data = file.readAll();
       m_textEdit.setPlainText(QString::fromUtf8(data));
-      save(true);
+      (void)save(true);
     }
+  }
+}
+
+/**
+ * @brief Loads the code stored in the project file into the code editor.
+ */
+void JSON::FrameParser::readCode()
+{
+  m_textEdit.document()->setModified(false);
+
+  const auto code = ProjectModel::instance().frameParserCode();
+  if (m_textEdit.toPlainText() != code)
+  {
+    m_textEdit.setPlainText(code);
+    (void)loadScript(code);
   }
 }
 
@@ -321,134 +512,6 @@ void JSON::FrameParser::onThemeChanged()
   palette.setColor(QPalette::PlaceholderText,
                    theme->getColor("placeholder_text"));
   m_textEdit.setPalette(palette);
-}
-
-/**
- * @brief Validates the script and stores it into the project model.
- * @param silent if set to @c false, the user shall be notified that the script
- *               data was processed correctly.
- *
- * @return @c true on success, @c false on failure
- */
-bool JSON::FrameParser::save(const bool silent)
-{
-  // Update text edit
-  if (loadScript(m_textEdit.toPlainText()))
-  {
-    m_textEdit.document()->setModified(false);
-    ProjectModel::instance().setFrameParserCode(m_textEdit.toPlainText());
-
-    // Show save messagebox
-    if (!silent)
-      Misc::Utilities::showMessageBox(
-          tr("Frame parser code updated successfully!"),
-          tr("No errors have been detected in the code."));
-
-    // Everything good
-    return true;
-  }
-
-  // Something did not work quite right
-  return false;
-}
-
-/**
- * @brief Generates a callable JS function given the script code.
- *
- * This function validates that the given @a script data does not contain any
- * syntax errors and that it can be executed by the JavaScript Engine.
- *
- * If the conditions required to execute the frame parser code are met, this
- * function proceeds to generate a callable JS function that can be used
- * by the rest of the application modules.
- *
- * @param script JavaScript code
- *
- * @return @a true if the JS code is valid and contains to errors
- */
-bool JSON::FrameParser::loadScript(const QString &script)
-{
-  // Ensure that engine is configured correctly
-  m_engine.installExtensions(QJSEngine::ConsoleExtension
-                             | QJSEngine::GarbageCollectionExtension);
-
-  // Check if there are no general JS errors
-  QStringList errors;
-  m_engine.evaluate(script, "", 1, &errors);
-
-  // Check if parse() function exists
-  auto fun = m_engine.globalObject().property("parse");
-  if (fun.isNull() || !fun.isCallable())
-  {
-    Misc::Utilities::showMessageBox(
-        tr("Frame parser error!"),
-        tr("No parse() function has been declared!"));
-    return false;
-  }
-
-  // Try to run parse() function
-  QJSValueList args = {"", ","};
-  auto ret = fun.call(args);
-
-  // Error on engine evaluation
-  if (!errors.isEmpty())
-  {
-    Misc::Utilities::showMessageBox(
-        tr("Frame parser syntax error!"),
-        tr("Error on line %1.").arg(errors.first()));
-    return false;
-  }
-
-  // Error on function execution
-  else if (ret.isError())
-  {
-    QString errorStr;
-    switch (ret.errorType())
-    {
-      case QJSValue::GenericError:
-        errorStr = tr("Generic error");
-        break;
-      case QJSValue::EvalError:
-        errorStr = tr("Evaluation error");
-        break;
-      case QJSValue::RangeError:
-        errorStr = tr("Range error");
-        break;
-      case QJSValue::ReferenceError:
-        errorStr = tr("Reference error");
-        break;
-      case QJSValue::SyntaxError:
-        errorStr = tr("Syntax error");
-        break;
-      case QJSValue::TypeError:
-        errorStr = tr("Type error");
-        break;
-      case QJSValue::URIError:
-        errorStr = tr("URI error");
-        break;
-      default:
-        errorStr = tr("Unknown error");
-        break;
-    }
-
-    Misc::Utilities::showMessageBox(tr("Frame parser error detected!"),
-                                    errorStr);
-    return false;
-  }
-
-  // We have reached this point without any errors, set function caller
-  m_parseFunction = fun;
-  return true;
-}
-
-/**
- * @brief Loads the code stored in the project file into the code editor.
- */
-void JSON::FrameParser::readCode()
-{
-  m_textEdit.setPlainText(ProjectModel::instance().frameParserCode());
-  m_textEdit.document()->setModified(false);
-  loadScript(m_textEdit.toPlainText());
 }
 
 /**

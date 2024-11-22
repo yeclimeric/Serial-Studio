@@ -23,6 +23,8 @@
 import QtQuick
 import QtGraphs
 import SerialStudio
+import QtQuick.Layouts
+import QtQuick.Controls
 
 import "../"
 
@@ -49,30 +51,98 @@ Item {
     }
   }
 
-  //
-  // Plot widget
-  //
-  Plot {
-    id: plot
+
+  RowLayout {
+    spacing: 4
     anchors.margins: 8
     anchors.fill: parent
-    xMin: root.model.minX
-    xMax: root.model.maxX
-    yMin: root.model.minY
-    yMax: root.model.maxY
-    xLabel: qsTr("Samples")
-    yLabel: root.model.yLabel
-    curveColors: root.model.colors
-    xAxis.tickInterval: root.model.xTickInterval
-    yAxis.tickInterval: root.model.yTickInterval
 
     //
-    // Register curves
+    // Plot widget
     //
-    Instantiator {
-      model: root.model.count
-      delegate: LineSeries {
-        Component.onCompleted: plot.graph.addSeries(this)
+    Plot {
+      id: plot
+      xMin: root.model.minX
+      xMax: root.model.maxX
+      yMin: root.model.minY
+      yMax: root.model.maxY
+      xLabel: qsTr("Samples")
+      Layout.fillWidth: true
+      Layout.fillHeight: true
+      yLabel: root.model.yLabel
+      curveColors: root.model.colors
+      xAxis.tickInterval: root.model.xTickInterval
+      yAxis.tickInterval: root.model.yTickInterval
+
+      //
+      // Register curves
+      //
+      Instantiator {
+        model: root.model.count
+        delegate: LineSeries {
+          Component.onCompleted: plot.graph.addSeries(this)
+        }
+      }
+    }
+
+    //
+    // Legends widget
+    //
+    Item {
+      Layout.fillHeight: true
+      visible: Cpp_UI_Dashboard.showLegends
+      implicitWidth: _legends.implicitWidth + 8
+
+      Rectangle {
+        width: parent.width
+        anchors.centerIn: parent
+        height: Math.min(_legends.implicitHeight + 8, parent.height)
+
+        border.width: 1
+        color: Cpp_ThemeManager.colors["widget_base"]
+        border.color: Cpp_ThemeManager.colors["widget_border"]
+
+        Flickable {
+          clip: true
+          anchors.margins: 4
+          contentWidth: width
+          anchors.fill: parent
+          contentHeight: _legends.implicitHeight
+
+          ScrollBar.vertical: ScrollBar {
+            id: scroll
+          }
+
+          ColumnLayout {
+            id: _legends
+            spacing: 4
+            width: parent.width
+
+            Repeater {
+              model: root.model.count
+              delegate: RowLayout {
+                id: _label
+                spacing: 4
+                Layout.fillWidth: true
+
+                Rectangle {
+                  width: 14
+                  height: 14
+                  color: root.model.colors[index]
+                  Layout.alignment: Qt.AlignVCenter
+                }
+
+                Label {
+                  elide: Qt.ElideMiddle
+                  text: root.model.labels[index]
+                  Layout.alignment: Qt.AlignVCenter
+                  font: Cpp_Misc_CommonFonts.customMonoFont(0.8)
+                  Layout.maximumWidth: 128 - 14 - 8
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

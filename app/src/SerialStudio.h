@@ -24,8 +24,9 @@
 
 #include <QObject>
 #include <QVector>
-#include <JSON/Group.h>
-#include <JSON/Dataset.h>
+
+#include "JSON/Group.h"
+#include "JSON/Dataset.h"
 
 /**
  * @typedef Curve
@@ -111,9 +112,11 @@ public:
    */
   enum FrameDetection
   {
-    EndDelimiterOnly,    /**< Detects frames based only on an end delimiter. */
-    StartAndEndDelimiter /**< Detects frames based on both start and end
-                            delimiters. */
+    EndDelimiterOnly,     /**< Detects frames based only on an end delimiter. */
+    StartAndEndDelimiter, /**< Detects frames based on both start and end
+                               delimiters. */
+    NoDelimiters          /**< Disables frame detection and processes incoming
+                               data directly */
   };
   Q_ENUM(FrameDetection)
 

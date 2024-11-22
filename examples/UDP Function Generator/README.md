@@ -8,8 +8,6 @@ With **Serial Studio**, you can use the **Quick Plot** feature to easily visuali
 
 ![Serial Studio with UDP Function Generator](doc/screenshot.png)
 
-**Compatibility**: This program runs on any system with support for **POSIX sockets** and is compatible with **Serial Studio** for visualization.
-
 ### What is a Function Generator?
 
 A **function generator** creates electrical waveforms that can be used for testing circuits, analyzing systems, and generating real-time signals for processing. This program simulates such a generator but transmits its output over a UDP socket instead of generating physical signals.
@@ -40,18 +38,17 @@ The waveforms can be used for:
 
 ### 1. Compile the Program
 
-To compile the program, use the following command:
+To compile the program in UNIX systems, use the following command:
 
 ```bash
 gcc -o udp_function_generator udp_function_generator.c -lm
 ```
 
-You can also simply type:
+On Windows, you will need to use:
 
 ```bash
-make udp_function_generator
+gcc -o udp_function_generator.exe udp_function_generator.c -lws2_32 -lm
 ```
-
 
 ### 2. Run the Program
 

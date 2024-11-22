@@ -78,6 +78,7 @@ Widgets.Pane {
     category: "Dashboard"
     property alias points: plotPoints.value
     property alias columns: columns.value
+    property alias showLegends: legends.checked
     property alias decimalPlaces: decimalPlaces.value
     property alias axisOptions: axisVisibility.currentIndex
   }
@@ -241,6 +242,8 @@ Widgets.Pane {
                    Cpp_UI_Dashboard.totalWidgetCount > 1
         }
 
+
+
         //
         // Visualization controls
         //
@@ -312,6 +315,26 @@ Widgets.Pane {
           } Label {
             text: Math.round(columns.value)
             visible: Cpp_UI_Dashboard.totalWidgetCount > 1
+          }
+
+          //
+          // Show Legends
+          //
+          Label {
+            text: qsTr("Show Legends")
+            visible: Cpp_UI_Dashboard.totalWidgetCount > 0 && Cpp_UI_Dashboard.widgetCount(SerialStudio.DashboardMultiPlot) >= 1
+          } CheckBox {
+            id: legends
+            Layout.leftMargin: -8
+            Layout.alignment: Qt.AlignLeft
+            checked: Cpp_UI_Dashboard.showLegends
+            visible: Cpp_UI_Dashboard.totalWidgetCount > 0 && Cpp_UI_Dashboard.widgetCount(SerialStudio.DashboardMultiPlot) >= 1
+            onCheckedChanged: {
+              if (checked !== Cpp_UI_Dashboard.showLegends)
+                Cpp_UI_Dashboard.showLegends = checked
+            }
+          } Item {
+            visible: Cpp_UI_Dashboard.totalWidgetCount > 0 && Cpp_UI_Dashboard.widgetCount(SerialStudio.DashboardMultiPlot) >= 1
           }
         }
 

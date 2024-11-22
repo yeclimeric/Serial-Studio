@@ -27,8 +27,9 @@
 #include <QVariant>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <JSON/Group.h>
-#include <JSON/Action.h>
+
+#include "JSON/Group.h"
+#include "JSON/Action.h"
 
 namespace JSON
 {
@@ -69,7 +70,6 @@ public:
 
   [[nodiscard]] const QString &title() const;
   [[nodiscard]] const QString &frameEnd() const;
-  [[nodiscard]] const QString &separator() const;
   [[nodiscard]] const QString &frameStart() const;
 
   [[nodiscard]] const QVector<Group> &groups() const;
@@ -78,7 +78,6 @@ public:
 private:
   QString m_title;
   QString m_frameEnd;
-  QString m_separator;
   QString m_frameStart;
 
   QVector<Group> m_groups;

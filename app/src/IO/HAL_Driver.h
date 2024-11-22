@@ -40,39 +40,12 @@ namespace IO
  */
 class HAL_Driver : public QObject
 {
-  // clang-format off
   Q_OBJECT
-  Q_PROPERTY(bool ignoreDataDelimeters
-             READ ignoreDataDelimeters
-             WRITE setIgnoreDataDelimeters
-             NOTIFY ignoreDataDelimetersChanged)
-  // clang-format on
 
 signals:
-  /**
-   * @brief Emitted when the driver's configuration changes.
-   */
   void configurationChanged();
-
-  /**
-   * @brief Emitted when the `ignoreDataDelimeters` property changes.
-   */
-  void ignoreDataDelimetersChanged();
-
-  /**
-   * @brief Emitted when data is successfully written to the device.
-   */
   void dataSent(const QByteArray &data);
-
-  /**
-   * @brief Emitted when data is received and should be appended to a buffer.
-   */
   void dataReceived(const QByteArray &data);
-
-  /**
-   * @brief Emitted when data is received and should be processed directly.
-   */
-  void payloadReceived(const QByteArray &data);
 
 public:
   /**
@@ -80,77 +53,19 @@ public:
    */
   virtual void close() = 0;
 
-  /**
-   * @brief Check if the device is open.
-   */
   [[nodiscard]] virtual bool isOpen() const = 0;
-
-  /**
-   * @brief Check if the device is ready for reading.
-   */
   [[nodiscard]] virtual bool isReadable() const = 0;
-
-  /**
-   * @brief Check if the device is ready for writing.
-   */
   [[nodiscard]] virtual bool isWritable() const = 0;
-
-  /**
-   * @brief Check if the device configuration is valid.
-   */
   [[nodiscard]] virtual bool configurationOk() const = 0;
-
-  /**
-   * @brief Write data to the device. Returns the number of bytes written.
-   */
   [[nodiscard]] virtual quint64 write(const QByteArray &data) = 0;
-
-  /**
-   * @brief Open the device in the specified mode.
-   */
   [[nodiscard]] virtual bool open(const QIODevice::OpenMode mode) = 0;
 
-  /**
-   * Get the current value of the `ignoreDataDelimeters` property.
-   */
-  [[nodiscard]] bool ignoreDataDelimeters() const
-  {
-    return m_ignoreDataDelimeters;
-  }
-
-public slots:
-  /**
-   * Set the `ignoreDataDelimeters` property.
-   * @param ignore If true, received data is processed as payload directly.
-   */
-  void setIgnoreDataDelimeters(const bool ignore)
-  {
-    m_ignoreDataDelimeters = ignore;
-    Q_EMIT ignoreDataDelimetersChanged();
-  }
-
 protected:
-  /**
-   * Process incoming data.
-   * @param data The received data to process.
-   * Emits either `dataReceived` or `payloadReceived` based on the
-   * `ignoreDataDelimeters` property.
-   */
   void processData(const QByteArray &data)
   {
-    if (!ignoreDataDelimeters())
-    {
-      QMetaObject::invokeMethod(
-          this, [=] { Q_EMIT dataReceived(data); }, Qt::QueuedConnection);
-    }
-    else
-    {
-      QMetaObject::invokeMethod(
-          this, [=] { Q_EMIT payloadReceived(data); }, Qt::QueuedConnection);
-    }
+    QByteArray dataCopy(data);
+    QMetaObject::invokeMethod(
+        this, [=] { Q_EMIT dataReceived(dataCopy); }, Qt::QueuedConnection);
   }
-
-private:
-  bool m_ignoreDataDelimeters = false;
 };
 } // namespace IO

@@ -34,11 +34,6 @@
 #include "Misc/CommonFonts.h"
 
 /**
- * @brief Defines the maximum number of characters in the console buffer.
- */
-static const qsizetype MAX_BUFFER_SIZE = 256 * 1024;
-
-/**
  * Generates a hexdump of the given data
  */
 static QString HexDump(const char *data, const size_t size)
@@ -94,6 +89,7 @@ IO::Console::Console()
   , m_showTimestamp(false)
   , m_isStartingLine(true)
   , m_lastCharWasCR(false)
+  , m_textBuffer(1024 * 1024)
 {
   clear();
 }
@@ -120,7 +116,7 @@ bool IO::Console::echo() const
  */
 bool IO::Console::saveAvailable() const
 {
-  return m_textBuffer.length() > 0;
+  return m_textBuffer.size() > 0;
 }
 
 /**
@@ -273,7 +269,7 @@ void IO::Console::save()
     QFile file(path);
     if (file.open(QFile::WriteOnly))
     {
-      file.write(m_textBuffer.toUtf8());
+      file.write(m_textBuffer.peek(m_textBuffer.size()));
       file.close();
       Misc::Utilities::revealFile(path);
     }
@@ -290,11 +286,9 @@ void IO::Console::save()
 void IO::Console::clear()
 {
   m_textBuffer.clear();
-  m_textBuffer.squeeze();
-  m_textBuffer.reserve(MAX_BUFFER_SIZE);
   m_isStartingLine = true;
   m_lastCharWasCR = false;
-  Q_EMIT dataReceived();
+  Q_EMIT saveAvailableChanged();
 }
 
 /**
@@ -401,7 +395,8 @@ void IO::Console::print()
 {
   // Create text document
   QTextDocument document;
-  document.setPlainText(m_textBuffer);
+  document.setPlainText(
+      QString::fromUtf8(m_textBuffer.peek(m_textBuffer.size())));
 
   // Set font
   auto font = Misc::CommonFonts::instance().customMonoFont(0.8);
@@ -485,9 +480,11 @@ void IO::Console::append(const QString &string, const bool addTimestamp)
   if (string.isEmpty())
     return;
 
-  auto data = string;
+  // Check if we should update the save available feature
+  const bool previousSaveAvailable = saveAvailable();
 
   // Omit leading \n if a trailing \r was already rendered from previous payload
+  auto data = string;
   if (m_lastCharWasCR && data.startsWith('\n'))
     data.removeFirst();
 
@@ -543,22 +540,15 @@ void IO::Console::append(const QString &string, const bool addTimestamp)
   }
 
   // Add data to saved text buffer
-  m_textBuffer.append(processedString);
+  m_textBuffer.append(processedString.toUtf8());
 
-  // Check if the buffer size exceeds the maximum allowed size
-  if (m_textBuffer.size() > MAX_BUFFER_SIZE)
-  {
-    const auto excessSize = m_textBuffer.size() - MAX_BUFFER_SIZE;
-    m_textBuffer.remove(0, excessSize);
-  }
+  // Update save avaialable
+  if (saveAvailable() != previousSaveAvailable)
+    Q_EMIT saveAvailableChanged();
 
   // Update UI
   QMetaObject::invokeMethod(
-      this,
-      [=] {
-        Q_EMIT dataReceived();
-        Q_EMIT displayString(processedString);
-      },
+      this, [=] { Q_EMIT displayString(processedString); },
       Qt::QueuedConnection);
 }
 

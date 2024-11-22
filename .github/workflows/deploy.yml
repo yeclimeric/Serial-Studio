@@ -38,9 +38,9 @@ jobs:
   #
   # Linux build
   #
-  build-linux:
+  build-linux-x86_64:
     runs-on: ubuntu-22.04
-    name: '🐧 Ubuntu 22.04'
+    name: '🐧 Linux (x86_64)'
     steps:
     - name: '🧰 Checkout'
       uses: actions/checkout@v4
@@ -79,11 +79,18 @@ jobs:
       uses: lukka/get-cmake@latest
       with:
         useLocalCache: true
-      
+
+    #- name: '⚙️ Install Intel Compiler'
+    #  uses: fortran-lang/setup-fortran@v1
+    #  with:
+    #    compiler: intel
+    #    version: 2024.1
+
     - name: '🚧 Configure with CMake'
       run: |
         mkdir build
         cd build
+        #cmake ../ -DCMAKE_CXX_COMPILER=icpx -DCMAKE_C_COMPILER=icx -DCMAKE_BUILD_TYPE=Release
         cmake ../ -DCMAKE_BUILD_TYPE=Release
 
     - name: '🚧 Build application'
@@ -147,11 +154,11 @@ jobs:
 
 
   #
-  # macOS (aarch64) build
+  # macOS (arm64) build
   #
-  build-mac-aarch64:
+  build-mac-arm64:
     runs-on: macos-latest
-    name: '🍎 macOS (aarch64)'
+    name: '🍎 macOS (arm64)'
     steps:
     - name: '🧰 Checkout'
       uses: actions/checkout@v4
@@ -178,7 +185,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake ../ -DCMAKE_BUILD_TYPE=Release
+        cmake ../ -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_OSX_ARCHITECTURES="arm64"
 
     - name: '🚧 Build application'
       run: |
@@ -210,12 +217,12 @@ jobs:
         npm install --global create-dmg
         rm LICENSE.md
         create-dmg "${{env.APPLICATION}}.app" --dmg-title="${{env.APPLICATION}}"
-        mv "${{env.APPLICATION}} ${{env.VERSION}}.dmg" "${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-aarch64.dmg"
+        mv "${{env.APPLICATION}} ${{env.VERSION}}.dmg" "${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-arm64.dmg"
 
     - name: '📋 Notarize'
       uses: alex-spataru/xcode-notarize@v2
       with:
-        product-path: ${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-aarch64.dmg
+        product-path: ${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-arm64.dmg
         appstore-connect-username: ${{secrets.NOTARIZATION_USERNAME}}
         appstore-connect-teamid: ${{secrets.NOTARIZATION_TEAMID}}
         appstore-connect-password: ${{secrets.NOTARIZATION_PASSWORD}}
@@ -223,20 +230,21 @@ jobs:
     - name: '📌 Staple'
       uses: BoundfoxStudios/action-xcode-staple@v1
       with:
-        product-path: ${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-aarch64.dmg
+        product-path: ${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-arm64.dmg
 
     - name: '📤 Upload artifact: DMG'
       uses: actions/upload-artifact@v4
       with:
-        name: ${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-aarch64.dmg
-        path: ${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-aarch64.dmg
-        
+        name: ${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-arm64.dmg
+        path: ${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-arm64.dmg
+
+  
   #
-  # macOS (Intel) build
+  # macOS (arm64) build
   #
-  build-mac-intel:
-    runs-on: macos-12
-    name: '🍎 macOS (Intel)'
+  build-mac-x86_64:
+    runs-on: macos-latest
+    name: '🍎 macOS (x86_64)'
     steps:
     - name: '🧰 Checkout'
       uses: actions/checkout@v4
@@ -263,7 +271,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake ../ -DCMAKE_BUILD_TYPE=Release
+        cmake ../ -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_OSX_ARCHITECTURES="x86_64"
 
     - name: '🚧 Build application'
       run: |
@@ -315,13 +323,13 @@ jobs:
       with:
         name: ${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-x86_64.dmg
         path: ${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-x86_64.dmg
-
+        
   #
   # Windows build
   #
-  build-windows:
+  build-windows-x86_64:
     runs-on: windows-latest
-    name: '🧊 Windows'
+    name: '🧊 Windows (x86_64)'
     steps:
     - run: git config --global core.autocrlf input
     - name: '🧰 Checkout'
@@ -340,17 +348,22 @@ jobs:
       with:
         useLocalCache: true
 
+    - name: '🛠 Setup MSVC Development Environment'
+      uses: TheMrMilchmann/setup-msvc-dev@v3
+      with:
+        arch: x64
+        
     - name: '🚧 Configure with CMake'
       run: |
         mkdir build
         cd build
         cmake ../ -DCMAKE_CXX_COMPILER=cl -DCMAKE_C_COMPILER=cl -DCMAKE_BUILD_TYPE=Release
-        
+
     - name: '🚧 Build application'
       run: |
         cd build
         cmake --build . --config Release -j 16
-
+        
     - name: '📦 Package application'
       run: |
         cd build
@@ -368,10 +381,10 @@ jobs:
   upload:
       name: '🗂 Create release and upload artifacts'
       needs:
-        - build-mac-aarch64
-        - build-mac-intel
-        - build-windows
-        - build-linux
+        - build-mac-arm64
+        - build-mac-x86_64
+        - build-windows-x86_64
+        - build-linux-x86_64
       runs-on: ubuntu-latest
       steps:
       - name: '📥 Download artifacts'
@@ -389,7 +402,7 @@ jobs:
             ./pyuploadtool-x86_64.AppImage **/${{env.EXECUTABLE}}-${{env.VERSION}}-Linux-x86_64.deb
             ./pyuploadtool-x86_64.AppImage **/${{env.EXECUTABLE}}-${{env.VERSION}}-Linux-x86_64.rpm
             ./pyuploadtool-x86_64.AppImage **/${{env.EXECUTABLE}}-${{env.VERSION}}-Linux-x86_64.AppImage
-            ./pyuploadtool-x86_64.AppImage **/${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-aarch64.dmg
+            ./pyuploadtool-x86_64.AppImage **/${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-arm64.dmg
             ./pyuploadtool-x86_64.AppImage **/${{env.EXECUTABLE}}-${{env.VERSION}}-macOS-x86_64.dmg
             ./pyuploadtool-x86_64.AppImage **/${{env.EXECUTABLE}}-${{env.VERSION}}-Windows-x86_64.exe
 

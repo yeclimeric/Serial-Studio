@@ -26,7 +26,6 @@
 #include "IO/Drivers/Network.h"
 #include "IO/Drivers/BluetoothLE.h"
 
-#include "MQTT/Client.h"
 #include "Misc/Translator.h"
 
 #include <QApplication>
@@ -75,25 +74,20 @@ IO::Manager::Manager()
   // Move the frame parser worker to its dedicated thread
   m_frameReader.moveToThread(&m_workerThread);
 
-  // Connect frame parser worker signals to manager signals
-  connect(&m_frameReader, &IO::FrameReader::frameReady, this,
-          &IO::Manager::frameReceived, Qt::QueuedConnection);
-  connect(&m_frameReader, &IO::FrameReader::dataReceived, this,
-          &IO::Manager::dataReceived, Qt::QueuedConnection);
-
   // Automatically enable/disable the connect button when bus type changes
   connect(this, &IO::Manager::busTypeChanged, this,
           &IO::Manager::configurationChanged);
 
   // Avoid crashing the app when quitting
   connect(qApp, &QApplication::aboutToQuit, this, [=] {
-    disconnect(&m_frameReader, nullptr, nullptr, nullptr);
+    disconnect(&m_frameReader);
     m_workerThread.quit();
-    m_workerThread.wait();
+    if (!m_workerThread.wait(100))
+      m_workerThread.terminate();
   });
 
   // Start the worker thread
-  m_workerThread.start(QThread::TimeCriticalPriority);
+  m_workerThread.start(QThread::HighestPriority);
 
   // Set default data interface to serial port
   setBusType(SerialStudio::BusType::Serial);
@@ -292,7 +286,7 @@ void IO::Manager::toggleConnection()
 void IO::Manager::connectDevice()
 {
   // Configure current device
-  if (driver())
+  if (driver() && m_workerThread.isRunning())
   {
     // Set open flag
     QIODevice::OpenMode mode = QIODevice::ReadOnly;
@@ -304,8 +298,13 @@ void IO::Manager::connectDevice()
     {
       connect(driver(), &IO::HAL_Driver::dataReceived, &m_frameReader,
               &FrameReader::processData, Qt::QueuedConnection);
-      connect(driver(), &IO::HAL_Driver::payloadReceived, this,
-              &IO::Manager::processPayload, Qt::QueuedConnection);
+      connect(&m_frameReader, &IO::FrameReader::frameReady, this,
+              &IO::Manager::frameReceived, Qt::QueuedConnection);
+      connect(&m_frameReader, &IO::FrameReader::dataReceived, this,
+              &IO::Manager::dataReceived, Qt::QueuedConnection);
+
+      QMetaObject::invokeMethod(&m_frameReader, &FrameReader::reset,
+                                Qt::QueuedConnection);
     }
 
     // Error opening the device
@@ -328,18 +327,21 @@ void IO::Manager::disconnectDevice()
 {
   if (driver())
   {
-    // Disconnect bus signals/slots
-    disconnect(driver(), &IO::HAL_Driver::dataReceived, &m_frameReader,
-               &FrameReader::processData);
-    disconnect(driver(), &IO::HAL_Driver::payloadReceived, this,
-               &IO::Manager::processPayload);
+    // Disconnect frame reader
+    if (m_workerThread.isRunning())
+    {
+      disconnect(driver(), &IO::HAL_Driver::dataReceived, &m_frameReader,
+                 &FrameReader::processData);
+      disconnect(&m_frameReader, &IO::FrameReader::frameReady, this,
+                 &IO::Manager::frameReceived);
+      disconnect(&m_frameReader, &IO::FrameReader::dataReceived, this,
+                 &IO::Manager::dataReceived);
+      QMetaObject::invokeMethod(&m_frameReader, &FrameReader::reset,
+                                Qt::QueuedConnection);
+    }
 
     // Close driver device
     driver()->close();
-
-    // Clear the data buffer in the frame rader
-    QMetaObject::invokeMethod(&m_frameReader, &FrameReader::reset,
-                              Qt::QueuedConnection);
 
     // Update UI
     Q_EMIT driverChanged();
@@ -391,11 +393,12 @@ void IO::Manager::processPayload(const QByteArray &payload)
 {
   if (!payload.isEmpty())
   {
+    QByteArray copy = payload;
     QMetaObject::invokeMethod(
         this,
         [=] {
-          Q_EMIT dataReceived(payload);
-          Q_EMIT frameReceived(payload);
+          Q_EMIT dataReceived(copy);
+          Q_EMIT frameReceived(copy);
         },
         Qt::QueuedConnection);
   }
@@ -416,9 +419,11 @@ void IO::Manager::setStartSequence(const QString &sequence)
   if (m_startSequence.isEmpty())
     m_startSequence = QStringLiteral("/*");
 
-  QMetaObject::invokeMethod(
-      &m_frameReader, [=] { m_frameReader.setStartSequence(m_startSequence); },
-      Qt::QueuedConnection);
+  if (m_workerThread.isRunning())
+    QMetaObject::invokeMethod(
+        &m_frameReader,
+        [=] { m_frameReader.setStartSequence(m_startSequence); },
+        Qt::QueuedConnection);
 
   Q_EMIT startSequenceChanged();
 }
@@ -438,10 +443,11 @@ void IO::Manager::setFinishSequence(const QString &sequence)
   if (m_finishSequence.isEmpty())
     m_finishSequence = QStringLiteral("*/");
 
-  QMetaObject::invokeMethod(
-      &m_frameReader,
-      [=] { m_frameReader.setFinishSequence(m_finishSequence); },
-      Qt::QueuedConnection);
+  if (m_workerThread.isRunning())
+    QMetaObject::invokeMethod(
+        &m_frameReader,
+        [=] { m_frameReader.setFinishSequence(m_finishSequence); },
+        Qt::QueuedConnection);
 
   Q_EMIT finishSequenceChanged();
 }

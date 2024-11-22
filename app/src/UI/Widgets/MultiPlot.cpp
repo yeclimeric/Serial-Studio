@@ -20,6 +20,7 @@
  * THE SOFTWARE.
  */
 
+#include "SIMD/SIMD.h"
 #include "UI/Dashboard.h"
 #include "Misc/ThemeManager.h"
 #include "UI/Widgets/MultiPlot.h"
@@ -46,8 +47,9 @@ Widgets::MultiPlot::MultiPlot(const int index, QQuickItem *parent)
     m_maxY = std::numeric_limits<double>::lowest();
     for (const auto &dataset : group.datasets())
     {
-      m_minY = qMin(m_minY, dataset.min());
-      m_maxY = qMax(m_maxY, dataset.max());
+      m_labels.append(dataset.title());
+      m_minY = qMin(m_minY, qMin(dataset.min(), dataset.max()));
+      m_maxY = qMax(m_maxY, qMax(dataset.min(), dataset.max()));
     }
 
     // Obtain group title
@@ -157,6 +159,15 @@ const QStringList &Widgets::MultiPlot::colors() const
 }
 
 /**
+ * @brief Returns the labels of the datasets.
+ * @return The labels of the datasets.
+ */
+const QStringList &Widgets::MultiPlot::labels() const
+{
+  return m_labels;
+}
+
+/**
  * @brief Draws the data on the given QLineSeries.
  * @param series The QLineSeries to draw the data on.
  * @param index The index of the dataset to draw.
@@ -208,6 +219,13 @@ void Widgets::MultiPlot::updateRange()
   // Get the dashboard instance and check if the index is valid
   if (!VALIDATE_WIDGET(SerialStudio::DashboardMultiPlot, m_index))
     return;
+
+  // Clear dataset curves
+  for (auto &dataset : m_data)
+  {
+    dataset.clear();
+    dataset.squeeze();
+  }
 
   // Clear the data
   m_data.clear();
@@ -289,8 +307,8 @@ void Widgets::MultiPlot::calculateAutoScaleRange()
       ok &= !qFuzzyCompare(dataset.min(), dataset.max());
       if (ok)
       {
-        m_minY = qMin(m_minY, dataset.min());
-        m_maxY = qMax(m_maxY, dataset.max());
+        m_minY = qMin(m_minY, qMin(dataset.min(), dataset.max()));
+        m_maxY = qMax(m_maxY, qMax(dataset.min(), dataset.max()));
       }
 
       else
@@ -308,11 +326,13 @@ void Widgets::MultiPlot::calculateAutoScaleRange()
     // Loop through each dataset and find the min and max values
     for (const auto &dataset : m_data)
     {
-      for (const auto &point : dataset)
-      {
-        m_minY = qMin(m_minY, point.y());
-        m_maxY = qMax(m_maxY, point.y());
-      }
+      m_minY = qMin(m_minY, SIMD::findMin(dataset, [](const QPointF &p) {
+                      return p.y();
+                    }));
+
+      m_maxY = qMax(m_maxY, SIMD::findMax(dataset, [](const QPointF &p) {
+                      return p.y();
+                    }));
     }
 
     // If the min and max are the same, set the range to 0-1

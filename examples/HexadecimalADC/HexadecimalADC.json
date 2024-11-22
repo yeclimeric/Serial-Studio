@@ -2,8 +2,9 @@
     "actions": [
     ],
     "decoder": 1,
+    "frameDetection": 1,
     "frameEnd": ";",
-    "frameParser": "/**\n * This function parses a binary data frame (represented as a hexadecimal string),\n * and converts it into an array of decimal values (0-255).\n *\n * @param[in]  frame  The latest received frame as a hexadecimal string.\n * @return     Array of integers containing the parsed frame elements.\n */\nfunction parse(frame, separator) {\n    let dataArray = [];\n    for (let i = 0; i < frame.length; i += 2) {\n        let hexByte = frame.substring(i, i + 2);\n        let decimalValue = parseInt(hexByte, 16);\n        dataArray.push(decimalValue * 5.0 / 255);\n    }\n\n    return dataArray;\n}",
+    "frameParser": "/**\n * This function parses a binary data frame (represented as a hexadecimal string),\n * and converts it into an array of decimal values (0-255).\n *\n * @param[in]  frame  The latest received frame as a hexadecimal string.\n * @return     Array of integers containing the parsed frame elements.\n */\nfunction parse(frame) {\n    let dataArray = [];\n    for (let i = 0; i < frame.length; i += 2) {\n        let hexByte = frame.substring(i, i + 2);\n        let decimalValue = parseInt(hexByte, 16);\n        dataArray.push(decimalValue * 5.0 / 255);\n    }\n\n    return dataArray;\n}",
     "frameStart": "$",
     "groups": [
         {
@@ -11,8 +12,8 @@
                 {
                     "alarm": 0,
                     "fft": true,
-                    "fftSamples": 1024,
-                    "fftSamplingRate": 250,
+                    "fftSamples": 256,
+                    "fftSamplingRate": 1000,
                     "graph": false,
                     "index": 1,
                     "led": false,
@@ -28,8 +29,8 @@
                 {
                     "alarm": 0,
                     "fft": true,
-                    "fftSamples": 1024,
-                    "fftSamplingRate": 250,
+                    "fftSamples": 256,
+                    "fftSamplingRate": 1000,
                     "graph": false,
                     "index": 2,
                     "led": false,
@@ -45,8 +46,8 @@
                 {
                     "alarm": 0,
                     "fft": true,
-                    "fftSamples": 1024,
-                    "fftSamplingRate": 250,
+                    "fftSamples": 256,
+                    "fftSamplingRate": 1000,
                     "graph": false,
                     "index": 3,
                     "led": false,
@@ -62,8 +63,8 @@
                 {
                     "alarm": 0,
                     "fft": true,
-                    "fftSamples": 1024,
-                    "fftSamplingRate": 250,
+                    "fftSamples": 256,
+                    "fftSamplingRate": 1000,
                     "graph": false,
                     "index": 4,
                     "led": false,
@@ -79,8 +80,8 @@
                 {
                     "alarm": 0,
                     "fft": true,
-                    "fftSamples": 1024,
-                    "fftSamplingRate": 250,
+                    "fftSamples": 256,
+                    "fftSamplingRate": 1000,
                     "graph": false,
                     "index": 5,
                     "led": false,
@@ -96,8 +97,8 @@
                 {
                     "alarm": 0,
                     "fft": true,
-                    "fftSamples": 1024,
-                    "fftSamplingRate": 250,
+                    "fftSamples": 256,
+                    "fftSamplingRate": 1000,
                     "graph": false,
                     "index": 6,
                     "led": false,
@@ -116,7 +117,6 @@
         }
     ],
     "mapTilerApiKey": "",
-    "separator": ",",
     "thunderforestApiKey": "",
     "title": "Hexadecimal ADC"
 }

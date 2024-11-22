@@ -27,7 +27,6 @@
 #include "Misc/Utilities.h"
 
 #include "CSV/Player.h"
-#include "MQTT/Client.h"
 #include "JSON/ProjectModel.h"
 #include "JSON/FrameBuilder.h"
 
@@ -82,6 +81,14 @@ QString JSON::FrameBuilder::jsonMapFilename() const
   }
 
   return "";
+}
+
+/**
+ * Returns a pointer to the currently loaded frame parser editor.
+ */
+JSON::FrameParser *JSON::FrameBuilder::frameParser() const
+{
+  return m_frameParser;
 }
 
 /**
@@ -295,30 +302,24 @@ void JSON::FrameBuilder::readData(const QByteArray &data)
     {
       // Convert binary frame data to a string
       QString frameData;
-      QString separator;
       switch (JSON::ProjectModel::instance().decoderMethod())
       {
         case SerialStudio::PlainText:
           frameData = QString::fromUtf8(data);
-          separator = m_frame.separator();
           break;
         case SerialStudio::Hexadecimal:
           frameData = QString::fromUtf8(data.toHex());
-          separator = "";
           break;
         case SerialStudio::Base64:
           frameData = QString::fromUtf8(data.toBase64());
-          separator = "";
           break;
         default:
           frameData = QString::fromUtf8(data);
-          separator = m_frame.separator();
-          ;
           break;
       }
 
       // Get fields from frame parser function
-      fields = m_frameParser->parse(frameData, separator);
+      fields = m_frameParser->parse(frameData);
     }
 
     // CSV data, no need to perform conversions or use frame parser

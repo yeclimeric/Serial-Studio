@@ -20,6 +20,7 @@
  * THE SOFTWARE.
  */
 
+#include "SIMD/SIMD.h"
 #include "UI/Dashboard.h"
 #include "UI/Widgets/Plot.h"
 
@@ -40,9 +41,9 @@ Widgets::Plot::Plot(const int index, QQuickItem *parent)
   {
     const auto &dataset = GET_DATASET(SerialStudio::DashboardPlot, m_index);
 
-    m_minY = dataset.min();
-    m_maxY = dataset.max();
     m_yLabel = dataset.title();
+    m_minY = qMin(dataset.min(), dataset.max());
+    m_maxY = qMax(dataset.min(), dataset.max());
 
     if (!dataset.units().isEmpty())
       m_yLabel += " (" + dataset.units() + ")";
@@ -200,8 +201,8 @@ void Widgets::Plot::calculateAutoScaleRange()
     ok &= !qFuzzyCompare(dataset.min(), dataset.max());
     if (ok)
     {
-      m_minY = qMin(m_minY, dataset.min());
-      m_maxY = qMax(m_maxY, dataset.max());
+      m_minY = qMin(dataset.min(), dataset.max());
+      m_maxY = qMax(dataset.min(), dataset.max());
     }
   }
 
@@ -213,11 +214,8 @@ void Widgets::Plot::calculateAutoScaleRange()
     m_maxY = std::numeric_limits<double>::lowest();
 
     // Loop through the plot data and update the min and max
-    for (const auto &point : m_data)
-    {
-      m_minY = qMin(m_minY, point.y());
-      m_maxY = qMax(m_maxY, point.y());
-    }
+    m_minY = SIMD::findMin(m_data, [](const QPointF &p) { return p.y(); });
+    m_maxY = SIMD::findMax(m_data, [](const QPointF &p) { return p.y(); });
 
     // If min and max are the same, adjust the range
     if (qFuzzyCompare(m_minY, m_maxY))

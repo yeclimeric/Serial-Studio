@@ -23,14 +23,16 @@
 #pragma once
 
 #include <QObject>
-#include <JSON/Group.h>
-#include <JSON/Action.h>
-#include <JSON/Dataset.h>
 #include <QStandardItemModel>
 #include <QItemSelectionModel>
-#include <Misc/OsmTemplateServer.h>
 
-#include <SerialStudio.h>
+#include "SerialStudio.h"
+
+#include "JSON/Group.h"
+#include "JSON/Action.h"
+#include "JSON/Dataset.h"
+
+#include "Misc/OsmTemplateServer.h"
 
 namespace JSON
 {
@@ -271,7 +273,10 @@ public slots:
   void addGroup(const QString &title, const SerialStudio::GroupWidget widget);
   bool setGroupWidget(const int group, const SerialStudio::GroupWidget widget);
 
+  void setModified(const bool modified);
   void setFrameParserCode(const QString &code);
+
+  void displayFrameParserView();
 
   void buildTreeModel();
   void buildProjectModel();
@@ -283,7 +288,6 @@ private slots:
   void onJsonLoaded();
   void onGpsApiKeysChanged();
   void generateComboBoxModels();
-  void setModified(const bool modified);
   void setCurrentView(const CurrentView view);
   void onGroupItemChanged(QStandardItem *item);
   void onActionItemChanged(QStandardItem *item);
@@ -301,7 +305,6 @@ private:
 
 private:
   QString m_title;
-  QString m_separator;
   QString m_frameParserCode;
   QString m_frameEndSequence;
   QString m_frameStartSequence;

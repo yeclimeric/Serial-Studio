@@ -85,15 +85,3 @@ target_include_directories(
  QSourceHighlite PUBLIC
  ${CMAKE_CURRENT_SOURCE_DIR}
 )
-
-#-------------------------------------------------------------------------------
-# Configure unity build
-#-------------------------------------------------------------------------------
-
-set_target_properties(
- QSourceHighlite PROPERTIES
- UNITY_BUILD ON
- UNITY_BUILD_MODE BATCH
- UNITY_BUILD_BATCH_SIZE 128
- INTERPROCEDURAL_OPTIMIZATION TRUE
-)

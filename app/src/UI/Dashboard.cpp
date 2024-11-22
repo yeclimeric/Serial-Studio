@@ -20,13 +20,19 @@
  * THE SOFTWARE.
  */
 
+#include "UI/Dashboard.h"
+
+#include "SIMD/SIMD.h"
 #include "IO/Manager.h"
 #include "CSV/Player.h"
-#include "UI/Dashboard.h"
 #include "MQTT/Client.h"
 #include "Misc/TimerEvents.h"
 #include "Misc/ThemeManager.h"
 #include "JSON/FrameBuilder.h"
+
+//------------------------------------------------------------------------------
+// UI::Dashboard implementation
+//------------------------------------------------------------------------------
 
 /**
  * @brief Constructs the Dashboard object and establishes connections for
@@ -37,6 +43,7 @@ UI::Dashboard::Dashboard()
   : m_points(100)
   , m_precision(2)
   , m_widgetCount(0)
+  , m_showLegends(true)
   , m_updateRequired(false)
   , m_axisVisibility(SerialStudio::AxisXY)
 {
@@ -148,7 +155,19 @@ qreal UI::Dashboard::smartInterval(const qreal min, const qreal max,
  */
 bool UI::Dashboard::available() const
 {
-  return totalWidgetCount() > 0;
+  return totalWidgetCount() > 0
+         && (IO::Manager::instance().connected()
+             || CSV::Player::instance().isOpen()
+             || MQTT::Client::instance().isSubscribed());
+}
+
+/**
+ * @brief Returns @c true whenever the user has enabled the option to show
+ *        legends in multiplot widgets.
+ */
+bool UI::Dashboard::showLegends() const
+{
+  return m_showLegends;
 }
 
 /**
@@ -551,6 +570,21 @@ void UI::Dashboard::setPrecision(const int precision)
 }
 
 /**
+ * @brief Instructs multiplot widgets to display (or hide) the legend labels
+ *        for each one of the curves that it contains.
+ *
+ * @param enabled The new enabled setting.
+ */
+void UI::Dashboard::setShowLegends(const bool enabled)
+{
+  if (m_showLegends != enabled)
+  {
+    m_showLegends = enabled;
+    Q_EMIT showLegendsChanged();
+  }
+}
+
+/**
  * @brief Resets all data in the dashboard, including plot values,
  *        widget structures, and actions. Emits relevant signals to notify the
  *        UI about the reset state.
@@ -648,8 +682,7 @@ void UI::Dashboard::updatePlots()
     {
       m_linearPlotValues.append(Curve());
       m_linearPlotValues.last().resize(points() + 1);
-      std::fill(m_linearPlotValues.last().begin(),
-                m_linearPlotValues.last().end(), 0.0001);
+      SIMD::fill<qreal>(m_linearPlotValues.last().data(), points() + 1, 0);
     }
   }
 
@@ -663,8 +696,7 @@ void UI::Dashboard::updatePlots()
       const auto &dataset = getDatasetWidget(SerialStudio::DashboardFFT, i);
       m_fftPlotValues.append(Curve());
       m_fftPlotValues.last().resize(dataset.fftSamples());
-      std::fill(m_fftPlotValues.last().begin(), m_fftPlotValues.last().end(),
-                0);
+      SIMD::fill<qreal>(m_fftPlotValues.last().data(), dataset.fftSamples(), 0);
     }
   }
 
@@ -682,8 +714,7 @@ void UI::Dashboard::updatePlots()
       for (int j = 0; j < group.datasetCount(); ++j)
       {
         m_multiplotValues[i][j].resize(points() + 1);
-        std::fill(m_multiplotValues[i][j].begin(),
-                  m_multiplotValues[i][j].end(), 0.0001);
+        SIMD::fill<qreal>(m_multiplotValues[i][j].data(), points() + 1, 0);
       }
     }
   }
@@ -694,8 +725,7 @@ void UI::Dashboard::updatePlots()
     const auto &dataset = getDatasetWidget(SerialStudio::DashboardPlot, i);
     auto *data = m_linearPlotValues[i].data();
     auto count = m_linearPlotValues[i].count();
-    memmove(data, data + 1, count * sizeof(qreal));
-    m_linearPlotValues[i][count - 1] = dataset.value().toDouble();
+    SIMD::shift<qreal>(data, count, dataset.value().toDouble());
   }
 
   // Append latest values to FFT plots data
@@ -704,8 +734,7 @@ void UI::Dashboard::updatePlots()
     const auto &dataset = getDatasetWidget(SerialStudio::DashboardFFT, i);
     auto *data = m_fftPlotValues[i].data();
     auto count = m_fftPlotValues[i].count();
-    memmove(data, data + 1, count * sizeof(qreal));
-    m_fftPlotValues[i][count - 1] = dataset.value().toDouble();
+    SIMD::shift<qreal>(data, count, dataset.value().toDouble());
   }
 
   // Append latest values to multiplots data
@@ -717,8 +746,7 @@ void UI::Dashboard::updatePlots()
       const auto &dataset = group.datasets()[j];
       auto *data = m_multiplotValues[i][j].data();
       auto count = m_multiplotValues[i][j].count();
-      memmove(data, data + 1, count * sizeof(qreal));
-      m_multiplotValues[i][j][count - 1] = dataset.value().toDouble();
+      SIMD::shift<qreal>(data, count, dataset.value().toDouble());
     }
   }
 }
